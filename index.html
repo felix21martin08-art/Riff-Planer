@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang='de'>
+<head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<link rel='stylesheet' href='styles.css'><script src='data.js'></script><script src='engine.js'></script>
+<title>Riffplaner V12B</title></head>
+<body>
+<nav>
+<button onclick="setCat('fish')">🐟</button>
+<button onclick="setCat('invert')">🦐</button>
+<button onclick="setCat('coral')">🪸</button>
+<button onclick="setCat('besatz')">📋</button>
+<button onclick="location.href='add.html'">✚</button>
+</nav>
+<input id="liter" placeholder="Aquarium Liter..." oninput="saveLiter();render();">
+<div id="list"></div>
+</body></html>

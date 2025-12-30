@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang='de'>
+<head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<link rel='stylesheet' href='styles.css'><script src='data.js'></script>
+<title>Details</title></head><body>
+<a href='index.html' class='back'>← Zurück</a><div id='info'></div>
+<div class='legend'><h3>⭐ Legende</h3>
+⭐ sehr friedlich<br>⭐⭐ eher friedlich<br>⭐⭐⭐ neutral<br>⭐⭐⭐⭐ territorial<br>⭐⭐⭐⭐⭐ aggressiv</div>
+<button onclick='addTank()'>Zum Becken hinzufügen</button>
+<script>
+let name=localStorage.getItem('details_item');
+let all=[...tiere,...JSON.parse(localStorage.getItem('tiere_custom')||'[]')];
+let d=all.find(x=>x.name===name);
+let L=parseInt(localStorage.getItem('literset')||0);
+document.getElementById('info').innerHTML =
+ `<h2>${d.name}</h2>
+ 📏 Größe: ${d.size}<br>
+ 🍽️ Futter: ${d.food}<br>
+ 🌀 Strömung: ${d.flow}<br>
+ 💡 Licht: ${d.light}<br>
+ 🌡️ Temperatur: ${d.temp}<br>
+ ⭐ Aggressivität: ${d.agg}<br>
+ 🌿 Riffverträglichkeit: ${d.reef}<br>
+ 👥 Haltung: ${d.form}<br>
+ 💧 Mindestliter: ${d.min}<br>
+ ❗ Hinweis: ${d.note}<br>`;
+function addTank(){
+ if(L<d.min){
+   if(!confirm("⚠️ Becken zu klein. Trotzdem hinzufügen?")) return;
+ }
+ let b=JSON.parse(localStorage.getItem('besatz')||'[]');b.push(d);
+ localStorage.setItem('besatz',JSON.stringify(b));
+ alert("✔️ Hinzugefügt!");
+ location.href='index.html';
+}
+</script></body></html>

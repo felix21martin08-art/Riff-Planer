@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang='de'>
+<head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<link rel='stylesheet' href='styles.css'><title>+ Hinzufügen</title></head>
+<body><a href='index.html' class='back'>← Zurück</a>
+<input id='n' placeholder='Name...'>
+<select id='t'><option value='fish'>Fisch</option><option value='invert'>Wirbellose</option><option value='coral'>Koralle</option></select>
+<input id='m' placeholder='Mindestliter'>
+<input id='s' placeholder='Größe'>
+<input id='temp' placeholder='Temp.'>
+<input id='flow' placeholder='Strömung'>
+<input id='l' placeholder='Licht'>
+<input id='food' placeholder='Futter'>
+<input id='agg' placeholder='Aggression ⭐...'>
+<input id='reef' placeholder='Reef?'>
+<input id='form' placeholder='Haltung'>
+<input id='note' placeholder='Hinweis'>
+<button onclick='save()'>Speichern</button>
+<script>
+function save(){
+let arr=JSON.parse(localStorage.getItem('tiere_custom')||'[]');
+arr.push({name:n.value,type:t.value,min:parseInt(m.value)||0,size:s.value,temp:temp.value,flow:flow.value,light:l.value,
+food:food.value,agg:agg.value,reef:reef.value,form:form.value,note:note.value,img:'assets/img/'+t.value+'.png'});
+localStorage.setItem('tiere_custom',JSON.stringify(arr));location.href='index.html';
+}
+</script></body></html>

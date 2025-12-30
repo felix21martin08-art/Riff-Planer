@@ -1,0 +1,8 @@
+body{background:#0A0F14;color:white;font-family:sans-serif;}
+nav{display:flex;gap:6px;background:#0a3c5f;padding:10px;}
+nav button{flex:1;background:#146b8c;border:none;border-radius:6px;padding:12px;color:white;}
+input,button{width:94%;margin:8px auto;display:block;padding:10px;border-radius:6px;background:#19232d;color:white;border:none;}
+.card{background:#131a20;margin:10px;border-radius:10px;display:flex;align-items:center;gap:12px;padding:10px;}
+.card img{width:60px;height:40px;border-radius:6px;}
+.warn{background:#3a1a1a;}
+.status{margin-left:auto;font-size:20px;}
