@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#1d3b2c" />
+
+<!-- Primary Meta -->
+<title>MietLos – Soziallotterie für mietfreies Wohnen & Studienförderung in Dresden</title>
+<meta name="description" content="MietLos ist die gemeinnützige Soziallotterie für Dresden: Sie ermöglicht Studierenden mietfreies Wohnen und finanzielle Studienförderung – transparent, solidarisch und gemeinschaftlich finanziert. Jetzt zum Start-Newsletter anmelden." />
+<meta name="author" content="MietLos gemeinnützige UG (in Gründung)" />
+<meta name="keywords" content="MietLos, Soziallotterie, mietfrei wohnen, Studienförderung, Dresden, Studierende, gemeinnützig, Wohnen, Stipendium" />
+<link rel="canonical" href="https://www.mietlos.de/" />
+<meta name="robots" content="index, follow" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="MietLos" />
+<meta property="og:locale" content="de_DE" />
+<meta property="og:title" content="MietLos – mietfrei wohnen & studieren in Dresden" />
+<meta property="og:description" content="Die gemeinnützige Soziallotterie für mietfreies Wohnen und Studienförderung in Dresden. Solidarisch finanziert, transparent verteilt." />
+<meta property="og:url" content="https://www.mietlos.de/" />
+<meta property="og:image" content="https://www.mietlos.de/assets/og-image.png" />
+<meta property="og:image:alt" content="MietLos – Soziallotterie für mietfreies Wohnen in Dresden" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="MietLos – mietfrei wohnen & studieren in Dresden" />
+<meta name="twitter:description" content="Die gemeinnützige Soziallotterie für mietfreies Wohnen und Studienförderung in Dresden." />
+<meta name="twitter:image" content="https://www.mietlos.de/assets/og-image.png" />
+<meta name="twitter:image:alt" content="MietLos – Soziallotterie für mietfreies Wohnen in Dresden" />
+
+<!-- Favicon / Touch Icon (vom Logo-Mark abgeleitet) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3b2c'/%3E%3Cpath d='M16 34 L32 20 L48 34 L48 48 L16 48 Z' fill='none' stroke='%23e9dcc3' stroke-width='3.4' stroke-linejoin='round'/%3E%3Cpath d='M32 41 c-3-4-7-3-7 .6 0 2.6 3.4 4.8 7 7.4 3.6-2.6 7-4.8 7-7.4 0-3.6-4-4.6-7-.6Z' fill='%237cc49b'/%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3b2c'/%3E%3Cpath d='M16 34 L32 20 L48 34 L48 48 L16 48 Z' fill='none' stroke='%23e9dcc3' stroke-width='3.4' stroke-linejoin='round'/%3E%3Cpath d='M32 41 c-3-4-7-3-7 .6 0 2.6 3.4 4.8 7 7.4 3.6-2.6 7-4.8 7-7.4 0-3.6-4-4.6-7-.6Z' fill='%237cc49b'/%3E%3C/svg%3E" />
+
+<!-- Fonts: preconnect + preload + swap -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" /></noscript>
+
+<!-- Structured Data: Organization -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "MietLos",
+  "legalName": "MietLos gemeinnützige UG (in Gründung)",
+  "url": "https://www.mietlos.de/",
+  "logo": "https://www.mietlos.de/assets/logo.png",
+  "description": "Gemeinnützige Soziallotterie für mietfreies Wohnen und Studienförderung in Dresden.",
+  "foundingDate": "2026",
+  "areaServed": {
+    "@type": "City",
+    "name": "Dresden"
+  },
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Dresden",
+    "addressRegion": "Sachsen",
+    "postalCode": "01067",
+    "addressCountry": "DE"
+  },
+  "email": "kontakt@mietlos.de",
+  "sameAs": [
+    "https://www.instagram.com/mietlos",
+    "https://www.linkedin.com/company/mietlos"
+  ]
+}
+</script>
+
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root{
+  /* Palette – Grün / Sand */
+  --green-900:#14271d;
+  --green-800:#1d3b2c;
+  --green-700:#274d3a;
+  --green-600:#2f6f4e;
+  --green-500:#3d8a63;
+  --green-400:#5aa97f;
+  --green-300:#7cc49b;
+  --green-100:#d8eade;
+  --green-tint:#e7f1ea;
+
+  --sand-50:#fcf9f3;
+  --sand-100:#f7f1e6;
+  --sand-200:#efe6d4;
+  --sand-300:#e4d6bd;
+  --sand-400:#d4c2a0;
+
+  --gold:#c9a24b;
+  --gold-soft:#e7cd92;
+
+  --ink:#1a2a21;
+  --ink-soft:#3a4a40;
+  --muted:#5d6b62;
+  --muted-on-dark:#b9cdc0;
+  --line:#e7ddcb;
+  --line-dark:rgba(255,255,255,.14);
+
+  --white:#ffffff;
+
+  /* Typografie */
+  --font-display:"Fraunces", Georgia, "Times New Roman", serif;
+  --font-body:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Spacing-Rhythmus (8px-Basis) */
+  --space-1:.25rem;
+  --space-2:.5rem;
+  --space-3:.75rem;
+  --space-4:1rem;
+  --space-5:1.5rem;
+  --space-6:2rem;
+  --space-7:3rem;
+  --space-8:4rem;
+  --space-9:6rem;
+  --section-y:clamp(4rem, 9vw, 7.5rem);
+  --container:1180px;
+  --container-narrow:760px;
+
+  /* Radien */
+  --radius-sm:10px;
+  --radius-md:16px;
+  --radius-lg:24px;
+  --radius-xl:32px;
+  --radius-pill:999px;
+
+  /* Schatten (konsistente Höhenstufen) */
+  --shadow-xs:0 1px 2px rgba(20,39,29,.06);
+  --shadow-sm:0 4px 14px -6px rgba(20,39,29,.16);
+  --shadow-md:0 14px 36px -16px rgba(20,39,29,.22);
+  --shadow-lg:0 30px 64px -28px rgba(20,39,29,.34);
+  --shadow-glow:0 18px 40px -18px rgba(47,111,78,.45);
+
+  /* Bewegung */
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --t-fast:.18s;
+  --t-med:.32s;
+  --t-slow:.6s;
+}
+
+/* ============================================================
+   RESET / BASE
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important;}
+}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  color:var(--ink);
+  background:var(--sand-50);
+  line-height:1.65;
+  font-size:clamp(1rem,.96rem + .2vw,1.075rem);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+img,svg{max-width:100%;display:block;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;cursor:pointer;}
+ul{margin:0;padding:0;list-style:none;}
+::selection{background:var(--green-300);color:var(--green-900);}
+
+h1,h2,h3,h4{
+  font-family:var(--font-display);
+  font-weight:600;
+  color:var(--green-900);
+  line-height:1.08;
+  letter-spacing:-.015em;
+  margin:0;
+  text-wrap:balance;
+}
+h1{font-size:clamp(2.5rem,1.6rem + 4vw,4.4rem);font-weight:600;}
+h2{font-size:clamp(1.9rem,1.3rem + 2.6vw,3rem);}
+h3{font-size:clamp(1.25rem,1.05rem + .8vw,1.6rem);letter-spacing:-.01em;}
+h4{font-size:1.12rem;letter-spacing:-.005em;}
+p{margin:0 0 1rem;}
+p:last-child{margin-bottom:0;}
+
+/* ============================================================
+   LAYOUT-UTILITIES
+   ============================================================ */
+.container{width:min(100% - 2.5rem,var(--container));margin-inline:auto;}
+.container.narrow{max-width:var(--container-narrow);}
+.section{padding-block:var(--section-y);position:relative;}
+.section + .section{padding-top:0;}
+.stack-sm > * + *{margin-top:var(--space-3);}
+
+.eyebrow{
+  display:inline-flex;align-items:center;gap:.55rem;
+  font-family:var(--font-body);
+  font-size:.78rem;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;
+  color:var(--green-600);
+  margin:0 0 1rem;
+}
+.eyebrow::before{
+  content:"";width:1.6rem;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,var(--green-500),var(--gold));
+}
+.section-head{max-width:42rem;margin-bottom:var(--space-7);}
+.section-head.center{margin-inline:auto;text-align:center;}
+.section-head.center .eyebrow::before{display:none;}
+.section-head p.lead{
+  color:var(--muted);font-size:1.12rem;margin-top:1rem;
+}
+.lead{font-size:1.15rem;color:var(--ink-soft);line-height:1.7;}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn{
+  --btn-bg:var(--green-600);
+  display:inline-flex;align-items:center;justify-content:center;gap:.6rem;
+  font-weight:600;font-size:1rem;
+  padding:.95rem 1.7rem;
+  min-height:48px;
+  border-radius:var(--radius-pill);
+  border:1px solid transparent;
+  background:var(--btn-bg);color:var(--white);
+  box-shadow:var(--shadow-sm);
+  transition:transform var(--t-fast) var(--ease),box-shadow var(--t-med) var(--ease),background var(--t-fast) var(--ease);
+  will-change:transform;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-glow);background:var(--green-700);}
+.btn:active{transform:translateY(0);}
+.btn .arrow{transition:transform var(--t-fast) var(--ease);}
+.btn:hover .arrow{transform:translateX(3px);}
+.btn--ghost{background:transparent;color:var(--green-800);border-color:var(--line);box-shadow:none;}
+.btn--ghost:hover{background:var(--white);border-color:var(--green-400);box-shadow:var(--shadow-sm);}
+.btn--gold{--btn-bg:var(--gold);color:var(--green-900);}
+.btn--gold:hover{background:#b88f38;}
+.btn--light{background:var(--white);color:var(--green-800);}
+.btn--light:hover{background:var(--sand-100);color:var(--green-900);}
+.btn--lg{padding:1.05rem 2rem;font-size:1.05rem;min-height:54px;}
+.btn--block{width:100%;}
+
+.textlink{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-weight:600;color:var(--green-600);
+  border-bottom:1.5px solid transparent;
+  transition:color var(--t-fast),border-color var(--t-fast);
+}
+.textlink:hover{color:var(--green-800);border-color:currentColor;}
+
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+.skip-link{
+  position:absolute;left:1rem;top:-100px;z-index:200;
+  background:var(--green-800);color:#fff;
+  padding:.8rem 1.2rem;border-radius:var(--radius-sm);font-weight:600;
+  transition:top var(--t-med) var(--ease);
+}
+.skip-link:focus{top:1rem;}
+:focus-visible{
+  outline:3px solid var(--green-500);
+  outline-offset:3px;
+  border-radius:6px;
+}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.site-header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(252,249,243,.72);
+  backdrop-filter:saturate(160%) blur(14px);
+  -webkit-backdrop-filter:saturate(160%) blur(14px);
+  border-bottom:1px solid transparent;
+  transition:box-shadow var(--t-med) var(--ease),border-color var(--t-med) var(--ease),background var(--t-med) var(--ease);
+}
+.site-header.scrolled{
+  box-shadow:0 8px 30px -18px rgba(20,39,29,.28);
+  border-bottom-color:var(--line);
+  background:rgba(252,249,243,.92);
+}
+.nav{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:var(--space-5);
+  height:76px;
+}
+.brand{display:inline-flex;align-items:center;gap:.7rem;font-family:var(--font-display);font-weight:600;font-size:1.3rem;color:var(--green-900);letter-spacing:-.01em;}
+.brand:hover .brand-mark{transform:rotate(-6deg) scale(1.04);}
+.brand-mark{width:40px;height:40px;flex:none;transition:transform var(--t-med) var(--ease);}
+.brand small{display:block;font-family:var(--font-body);font-weight:500;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--green-600);margin-top:-2px;}
+.nav-links{display:flex;align-items:center;gap:.35rem;}
+.nav-links a{
+  padding:.55rem .85rem;border-radius:var(--radius-pill);
+  font-weight:500;font-size:.96rem;color:var(--ink-soft);
+  position:relative;
+  transition:color var(--t-fast),background var(--t-fast);
+}
+.nav-links a:hover{color:var(--green-800);background:rgba(47,111,78,.08);}
+.nav-actions{display:flex;align-items:center;gap:.6rem;}
+.nav-toggle{
+  display:none;width:48px;height:48px;border:1px solid var(--line);
+  background:var(--white);border-radius:var(--radius-sm);
+  align-items:center;justify-content:center;
+  box-shadow:var(--shadow-xs);
+}
+.nav-toggle span{position:relative;width:20px;height:2px;background:var(--green-900);border-radius:2px;transition:background .1s;}
+.nav-toggle span::before,.nav-toggle span::after{content:"";position:absolute;left:0;width:20px;height:2px;background:var(--green-900);border-radius:2px;transition:transform var(--t-med) var(--ease);}
+.nav-toggle span::before{top:-6px;}
+.nav-toggle span::after{top:6px;}
+.nav-toggle[aria-expanded="true"] span{background:transparent;}
+.nav-toggle[aria-expanded="true"] span::before{transform:translateY(6px) rotate(45deg);}
+.nav-toggle[aria-expanded="true"] span::after{transform:translateY(-6px) rotate(-45deg);}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{
+  position:relative;
+  padding-top:clamp(3rem,6vw,5rem);
+  padding-bottom:clamp(4rem,7vw,6rem);
+  background:
+    radial-gradient(1100px 520px at 85% -10%,rgba(124,196,155,.28),transparent 60%),
+    radial-gradient(900px 500px at 5% 110%,rgba(201,162,75,.12),transparent 55%),
+    linear-gradient(180deg,var(--sand-50),var(--sand-100));
+  overflow:hidden;
+}
+.hero::before{
+  /* subtile Punkt-Textur */
+  content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(31,59,44,.05) 1px,transparent 1.4px);
+  background-size:26px 26px;
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent 78%);
+  mask-image:linear-gradient(180deg,#000,transparent 78%);
+  pointer-events:none;
+}
+.hero-grid{
+  position:relative;
+  display:grid;grid-template-columns:1.05fr .95fr;
+  gap:clamp(2rem,5vw,4.5rem);align-items:center;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:.6rem;
+  background:rgba(47,111,78,.1);
+  color:var(--green-700);
+  border:1px solid rgba(47,111,78,.2);
+  padding:.45rem .9rem;border-radius:var(--radius-pill);
+  font-size:.82rem;font-weight:600;letter-spacing:.01em;
+  margin-bottom:1.6rem;
+}
+.hero-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green-500);box-shadow:0 0 0 0 rgba(61,138,99,.6);animation:pulse 2.4s var(--ease) infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,138,99,.5);}70%{box-shadow:0 0 0 9px rgba(61,138,99,0);}100%{box-shadow:0 0 0 0 rgba(61,138,99,0);}}
+.hero h1{margin-bottom:1.3rem;}
+.hero h1 .accent{
+  background:linear-gradient(120deg,var(--green-600),var(--green-400) 60%,var(--gold));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  font-style:italic;
+}
+.hero-lead{font-size:1.2rem;color:var(--ink-soft);max-width:34rem;margin-bottom:2rem;line-height:1.7;}
+.hero-cta{display:flex;flex-wrap:wrap;gap:.9rem;align-items:center;}
+.hero-trust{
+  display:flex;flex-wrap:wrap;gap:1.4rem;margin-top:2.4rem;
+  padding-top:1.6rem;border-top:1px solid var(--line);
+}
+.hero-trust li{display:flex;align-items:center;gap:.55rem;font-size:.9rem;color:var(--muted);font-weight:500;}
+.hero-trust svg{width:18px;height:18px;color:var(--green-500);flex:none;}
+
+/* Hero-Illustration: Haus + Los */
+.hero-art{position:relative;display:flex;justify-content:center;}
+.hero-art .scene{width:min(100%,460px);filter:drop-shadow(0 40px 60px rgba(20,39,29,.22));}
+.float-card{
+  position:absolute;background:var(--white);
+  border:1px solid var(--line);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md);
+  padding:.85rem 1.05rem;display:flex;align-items:center;gap:.7rem;
+  font-size:.85rem;font-weight:600;color:var(--green-900);
+}
+.float-card .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;color:#fff;}
+.float-card small{display:block;font-weight:500;color:var(--muted);font-size:.74rem;}
+.float-card--a{top:6%;left:-4%;animation:floaty 6s var(--ease) infinite;}
+.float-card--b{bottom:8%;right:-5%;animation:floaty 6s var(--ease) infinite 1.6s;}
+@keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+
+/* ============================================================
+   SECTION TRANSITIONS (weiche Hell/Dunkel-Übergänge)
+   ============================================================ */
+.section--sand{background:var(--sand-100);}
+.section--sand-soft{background:linear-gradient(180deg,var(--sand-50),var(--sand-100));}
+.section--dark{
+  background:
+    radial-gradient(800px 400px at 80% -10%,rgba(124,196,155,.16),transparent 60%),
+    linear-gradient(180deg,var(--green-800),var(--green-900));
+  color:var(--sand-100);
+}
+.section--dark h2,.section--dark h3,.section--dark h4{color:var(--white);}
+.section--dark .eyebrow{color:var(--green-300);}
+.section--dark .lead,.section--dark p{color:var(--muted-on-dark);}
+.wave-top,.wave-bottom{position:absolute;left:0;width:100%;line-height:0;pointer-events:none;}
+.wave-top{top:-1px;}
+.wave-bottom{bottom:-1px;}
+.wave-top svg,.wave-bottom svg{width:100%;height:clamp(40px,6vw,90px);display:block;}
+
+/* ============================================================
+   CARDS / GRID
+   ============================================================ */
+.grid{display:grid;gap:var(--space-5);}
+.grid-2{grid-template-columns:repeat(2,1fr);}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+
+.card{
+  background:var(--white);
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg);
+  padding:var(--space-6);
+  box-shadow:var(--shadow-xs);
+  transition:transform var(--t-med) var(--ease),box-shadow var(--t-med) var(--ease),border-color var(--t-med) var(--ease);
+  position:relative;overflow:hidden;
+}
+.card:hover{transform:translateY(-5px);box-shadow:var(--shadow-md);border-color:var(--green-300);}
+.card .icon{
+  width:54px;height:54px;border-radius:var(--radius-md);
+  display:grid;place-items:center;margin-bottom:1.2rem;
+  background:var(--green-tint);color:var(--green-600);
+  transition:background var(--t-med) var(--ease),color var(--t-med) var(--ease),transform var(--t-med) var(--ease);
+}
+.card:hover .icon{background:var(--green-600);color:#fff;transform:scale(1.05) rotate(-4deg);}
+.card .icon svg{width:26px;height:26px;}
+.card h3{margin-bottom:.6rem;}
+.card p{color:var(--muted);font-size:.98rem;}
+
+/* Step-Cards (So funktioniert's) */
+.steps{counter-reset:step;}
+.step{position:relative;}
+.step .step-num{
+  position:absolute;top:var(--space-6);right:var(--space-6);
+  font-family:var(--font-display);font-size:2.6rem;font-weight:600;
+  color:var(--sand-300);line-height:1;
+  transition:color var(--t-med) var(--ease);
+}
+.step:hover .step-num{color:var(--gold-soft);}
+
+/* ============================================================
+   STATS / ZAHLEN
+   ============================================================ */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-5);}
+.stat{
+  text-align:center;padding:var(--space-5);
+  border-radius:var(--radius-lg);
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--line-dark);
+  backdrop-filter:blur(6px);
+}
+.stat .num{
+  font-family:var(--font-display);font-weight:600;
+  font-size:clamp(2.2rem,1.5rem + 2.4vw,3.4rem);
+  line-height:1;color:var(--white);
+  background:linear-gradient(120deg,#fff,var(--green-300));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.stat .label{margin-top:.6rem;font-size:.92rem;color:var(--muted-on-dark);}
+
+/* ============================================================
+   TRANSPARENZ / DONUT
+   ============================================================ */
+.transparency{display:grid;grid-template-columns:.85fr 1.15fr;gap:clamp(2rem,5vw,4rem);align-items:center;}
+.donut-wrap{display:flex;justify-content:center;}
+.donut{
+  --p1:42;--p2:38;
+  width:min(320px,80vw);aspect-ratio:1;border-radius:50%;
+  background:conic-gradient(
+    var(--green-600) 0 calc(var(--p1)*1%),
+    var(--gold) 0 calc((var(--p1) + var(--p2))*1%),
+    var(--green-300) 0 100%);
+  position:relative;
+  box-shadow:var(--shadow-md);
+  -webkit-mask:radial-gradient(circle 64px at center,transparent 98%,#000 100%);
+          mask:radial-gradient(farthest-side,transparent calc(100% - 66px),#000 calc(100% - 65px));
+}
+.donut-center{
+  position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+}
+.donut-center strong{font-family:var(--font-display);font-size:1.7rem;color:var(--green-900);display:block;line-height:1;}
+.donut-center span{font-size:.82rem;color:var(--muted);}
+.legend{display:grid;gap:1rem;}
+.legend li{display:grid;grid-template-columns:auto 1fr auto;gap:.9rem;align-items:center;padding-bottom:1rem;border-bottom:1px solid var(--line);}
+.legend li:last-child{border-bottom:0;padding-bottom:0;}
+.legend .swatch{width:16px;height:16px;border-radius:5px;}
+.legend strong{font-size:1.4rem;font-family:var(--font-display);color:var(--green-900);}
+.legend .key{font-weight:600;color:var(--green-900);}
+.legend small{display:block;color:var(--muted);font-weight:400;font-size:.86rem;}
+
+/* ============================================================
+   PRIZES
+   ============================================================ */
+.prize{
+  display:grid;grid-template-columns:auto 1fr;gap:1.3rem;align-items:start;
+  padding:var(--space-6);background:var(--white);
+  border:1px solid var(--line);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-xs);
+  transition:transform var(--t-med) var(--ease),box-shadow var(--t-med) var(--ease);
+}
+.prize:hover{transform:translateY(-4px);box-shadow:var(--shadow-md);}
+.prize.featured{
+  grid-column:span 2;
+  background:linear-gradient(135deg,var(--green-700),var(--green-900));
+  color:#fff;border-color:transparent;
+  position:relative;overflow:hidden;
+}
+.prize.featured::after{
+  content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,rgba(124,196,155,.3),transparent 70%);
+}
+.prize.featured h3,.prize.featured .big{color:#fff;}
+.prize.featured p{color:var(--muted-on-dark);}
+.prize .medal{
+  width:58px;height:58px;border-radius:var(--radius-md);flex:none;
+  display:grid;place-items:center;background:var(--gold);color:var(--green-900);
+}
+.prize.featured .medal{background:var(--gold);}
+.prize .big{font-family:var(--font-display);font-size:1.5rem;color:var(--green-900);margin-bottom:.3rem;}
+
+/* ============================================================
+   PARTNER
+   ============================================================ */
+.partner-card{
+  background:rgba(255,255,255,.05);border:1px solid var(--line-dark);
+  border-radius:var(--radius-lg);padding:var(--space-6);
+  transition:transform var(--t-med) var(--ease),background var(--t-med) var(--ease),border-color var(--t-med) var(--ease);
+}
+.partner-card:hover{transform:translateY(-5px);background:rgba(255,255,255,.09);border-color:var(--green-400);}
+.partner-card .icon{background:rgba(124,196,155,.16);color:var(--green-300);}
+.partner-card:hover .icon{background:var(--green-500);color:#fff;}
+.partner-card h3{color:#fff;margin-bottom:.5rem;}
+.partner-card p{color:var(--muted-on-dark);font-size:.96rem;}
+.partner-card .textlink{color:var(--green-300);}
+.partner-card .textlink:hover{color:#fff;}
+
+/* ============================================================
+   FAQ
+   ============================================================ */
+.faq{max-width:var(--container-narrow);margin-inline:auto;}
+.faq-item{
+  border:1px solid var(--line);border-radius:var(--radius-md);
+  background:var(--white);margin-bottom:.9rem;overflow:hidden;
+  transition:box-shadow var(--t-med) var(--ease),border-color var(--t-med) var(--ease);
+}
+.faq-item:hover{border-color:var(--green-300);box-shadow:var(--shadow-sm);}
+.faq-item[open]{box-shadow:var(--shadow-sm);border-color:var(--green-300);}
+.faq-q{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  width:100%;padding:1.25rem 1.4rem;
+  font-family:var(--font-display);font-size:1.12rem;font-weight:600;
+  color:var(--green-900);background:transparent;border:0;text-align:left;
+  min-height:56px;
+}
+.faq-q .chev{
+  flex:none;width:30px;height:30px;border-radius:50%;
+  display:grid;place-items:center;background:var(--green-tint);color:var(--green-600);
+  transition:transform var(--t-med) var(--ease),background var(--t-med) var(--ease);
+}
+.faq-item[open] .faq-q .chev{transform:rotate(180deg);background:var(--green-600);color:#fff;}
+.faq-a{padding:0 1.4rem 1.3rem;color:var(--muted);}
+.faq-a p{font-size:.98rem;}
+/* sanftes Aufklappen */
+.faq-item[open] .faq-a{animation:fadeSlide var(--t-med) var(--ease);}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+
+/* ============================================================
+   NEWSLETTER / CTA
+   ============================================================ */
+.cta-band{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(700px 360px at 15% 0%,rgba(124,196,155,.22),transparent 60%),
+    linear-gradient(135deg,var(--green-700),var(--green-900));
+  border-radius:var(--radius-xl);
+  padding:clamp(2.5rem,5vw,4rem);
+  color:#fff;
+  box-shadow:var(--shadow-lg);
+}
+.cta-band::before{
+  content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1.4px);
+  background-size:24px 24px;-webkit-mask-image:radial-gradient(circle at 80% 20%,#000,transparent 70%);mask-image:radial-gradient(circle at 80% 20%,#000,transparent 70%);
+}
+.cta-band > *{position:relative;}
+.cta-band h2{color:#fff;}
+.cta-band .lead{color:var(--muted-on-dark);}
+.newsletter-form{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.6rem;}
+.field{flex:1 1 260px;position:relative;}
+.field input[type=email]{
+  width:100%;padding:1rem 1.2rem;min-height:54px;
+  border-radius:var(--radius-pill);border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.1);color:#fff;font-size:1rem;
+  transition:border-color var(--t-fast),background var(--t-fast),box-shadow var(--t-fast);
+}
+.field input::placeholder{color:rgba(255,255,255,.6);}
+.field input:focus{outline:none;background:rgba(255,255,255,.16);border-color:var(--green-300);box-shadow:0 0 0 4px rgba(124,196,155,.25);}
+.consent{display:flex;align-items:flex-start;gap:.6rem;margin-top:1rem;font-size:.85rem;color:var(--muted-on-dark);max-width:38rem;}
+.consent input{margin-top:.2rem;width:18px;height:18px;accent-color:var(--green-400);flex:none;}
+.consent a{color:var(--green-300);text-decoration:underline;text-underline-offset:2px;}
+.form-msg{margin-top:.9rem;font-size:.92rem;font-weight:600;min-height:1.2rem;}
+.form-msg.ok{color:var(--green-300);}
+.form-msg.err{color:#ffb4a8;}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.site-footer{background:var(--green-900);color:var(--muted-on-dark);padding-top:var(--space-8);}
+.footer-grid{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:var(--space-6);padding-bottom:var(--space-7);}
+.footer-grid h4{color:#fff;font-family:var(--font-body);font-size:.82rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:1.1rem;font-weight:600;}
+.footer-brand .brand{color:#fff;margin-bottom:1rem;}
+.footer-brand .brand small{color:var(--green-300);}
+.footer-brand p{font-size:.94rem;max-width:24rem;color:var(--muted-on-dark);}
+.footer-links li{margin-bottom:.7rem;}
+.footer-links a{font-size:.94rem;color:var(--muted-on-dark);transition:color var(--t-fast),padding-left var(--t-fast);}
+.footer-links a:hover{color:#fff;padding-left:4px;}
+.founding-note{
+  display:inline-flex;align-items:center;gap:.6rem;
+  background:rgba(201,162,75,.14);border:1px solid rgba(201,162,75,.3);
+  color:var(--gold-soft);padding:.5rem .9rem;border-radius:var(--radius-pill);
+  font-size:.82rem;font-weight:600;margin-top:1.2rem;
+}
+.footer-bottom{
+  border-top:1px solid var(--line-dark);
+  padding:1.5rem 0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem;align-items:center;
+  font-size:.85rem;color:var(--muted-on-dark);
+}
+.social{display:flex;gap:.6rem;}
+.social a{
+  width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(255,255,255,.07);color:var(--muted-on-dark);
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
+}
+.social a:hover{background:var(--green-500);color:#fff;transform:translateY(-3px);}
+.social svg{width:18px;height:18px;}
+
+/* ============================================================
+   BACK TO TOP
+   ============================================================ */
+.to-top{
+  position:fixed;right:1.3rem;bottom:1.3rem;z-index:90;
+  width:48px;height:48px;border-radius:50%;
+  background:var(--green-700);color:#fff;border:0;
+  display:grid;place-items:center;box-shadow:var(--shadow-md);
+  opacity:0;visibility:hidden;transform:translateY(12px);
+  transition:opacity var(--t-med),transform var(--t-med),background var(--t-fast);
+}
+.to-top.show{opacity:1;visibility:visible;transform:translateY(0);}
+.to-top:hover{background:var(--green-600);}
+
+/* ============================================================
+   COOKIE BANNER
+   ============================================================ */
+.cookie{
+  position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:120;
+  max-width:560px;margin-inline:auto;
+  background:var(--white);border:1px solid var(--line);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+  padding:1.3rem 1.4rem;
+  display:none;
+}
+.cookie.show{display:block;animation:fadeSlideUp var(--t-slow) var(--ease);}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.cookie h4{margin-bottom:.4rem;}
+.cookie p{font-size:.9rem;color:var(--muted);margin-bottom:1rem;}
+.cookie p a{color:var(--green-600);text-decoration:underline;}
+.cookie-actions{display:flex;flex-wrap:wrap;gap:.6rem;}
+.cookie-actions .btn{flex:1 1 auto;padding:.7rem 1.2rem;min-height:44px;font-size:.92rem;}
+
+/* ============================================================
+   SCROLL-REVEAL
+   ============================================================ */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity var(--t-slow) var(--ease-out),transform var(--t-slow) var(--ease-out);}
+.reveal.in{opacity:1;transform:none;}
+.reveal[data-delay="1"]{transition-delay:.08s;}
+.reveal[data-delay="2"]{transition-delay:.16s;}
+.reveal[data-delay="3"]{transition-delay:.24s;}
+.reveal[data-delay="4"]{transition-delay:.32s;}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;}}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:980px){
+  .hero-grid{grid-template-columns:1fr;}
+  .hero-art{order:-1;max-width:420px;margin-inline:auto;}
+  .transparency{grid-template-columns:1fr;}
+  .grid-4{grid-template-columns:repeat(2,1fr);}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+}
+@media (max-width:760px){
+  .nav-links,.nav-actions .btn{display:none;}
+  .nav-toggle{display:flex;}
+  .site-header.open .nav-links{
+    display:flex;flex-direction:column;align-items:stretch;
+    position:absolute;left:0;right:0;top:76px;
+    background:var(--sand-50);border-bottom:1px solid var(--line);
+    padding:1rem 1.25rem 1.4rem;gap:.2rem;box-shadow:var(--shadow-md);
+  }
+  .site-header.open .nav-links a{padding:.9rem 1rem;min-height:48px;display:flex;align-items:center;}
+  .site-header.open .nav-actions .btn{display:inline-flex;}
+  .grid-3,.grid-2{grid-template-columns:1fr;}
+  .prize.featured{grid-column:span 1;}
+  .hero-cta .btn{width:100%;}
+}
+@media (max-width:560px){
+  .grid-4,.stats{grid-template-columns:1fr;}
+  .footer-grid{grid-template-columns:1fr;}
+  .footer-bottom{flex-direction:column;align-items:flex-start;}
+  h1{font-size:clamp(2.2rem,1.4rem + 5vw,3rem);}
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+<!-- ============ HEADER ============ -->
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="nav" aria-label="Hauptnavigation">
+      <a class="brand" href="#top" aria-label="MietLos Startseite">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <rect width="64" height="64" rx="15" fill="#1d3b2c"/>
+          <path d="M15 34 L32 19 L49 34 L49 49 L15 49 Z" fill="none" stroke="#e9dcc3" stroke-width="3.4" stroke-linejoin="round"/>
+          <path d="M32 40.5 c-3-4-7.4-3-7.4 .8 0 2.8 3.6 5 7.4 7.7 3.8-2.7 7.4-4.9 7.4-7.7 0-3.8-4.4-4.8-7.4-.8Z" fill="#7cc49b"/>
+        </svg>
+        <span>MietLos<small>Soziallotterie Dresden</small></span>
+      </a>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#problem">Warum MietLos</a></li>
+        <li><a href="#ablauf">So funktioniert's</a></li>
+        <li><a href="#gewinne">Gewinne</a></li>
+        <li><a href="#transparenz">Transparenz</a></li>
+        <li><a href="#partner">Für Partner</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a class="btn" href="#newsletter">Newsletter <span class="arrow" aria-hidden="true">→</span></a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false" aria-controls="navLinks">
+          <span></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<span id="top"></span>
+
+<!-- ============ HERO ============ -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <span class="hero-badge"><span class="dot" aria-hidden="true"></span> Gemeinnützige Soziallotterie · In Gründung 2026</span>
+      <h1 id="hero-title">Wohnen ohne Miete.<br><span class="accent">Studieren ohne Sorgen.</span></h1>
+      <p class="hero-lead">MietLos ist die solidarische Soziallotterie für Dresden. Mit kleinen monatlichen Beiträgen ermöglichen wir Studierenden <strong>mietfreies Wohnen</strong> und gezielte <strong>Studienförderung</strong> – transparent, gemeinnützig und gemeinschaftlich finanziert.</p>
+      <div class="hero-cta">
+        <a class="btn btn--lg" href="#newsletter">Zum Start informiert werden <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn--ghost btn--lg" href="#ablauf">So funktioniert's</a>
+      </div>
+      <ul class="hero-trust">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg> 100 % gemeinnützig</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 7.7 8 10 4.6-2.3 8-5 8-10V6l-8-4Z" stroke-linejoin="round"/></svg> Transparente Mittelverwendung</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.5"/></svg> Sitz in Dresden</li>
+      </ul>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+      <!-- Veredelte Haus-Illustration -->
+      <svg class="scene" viewBox="0 0 460 420" role="img" aria-label="Illustration: mietfreies Wohnen">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#eef6f0"/><stop offset="1" stop-color="#dcebe0"/>
+          </linearGradient>
+          <linearGradient id="roof" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2f6f4e"/><stop offset="1" stop-color="#1d3b2c"/>
+          </linearGradient>
+          <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f3ead8"/>
+          </linearGradient>
+          <linearGradient id="ticket" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#e7cd92"/><stop offset="1" stop-color="#c9a24b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="230" cy="210" r="200" fill="url(#sky)"/>
+        <circle cx="350" cy="95" r="34" fill="#e7cd92" opacity=".85"/>
+        <!-- Boden -->
+        <ellipse cx="230" cy="372" rx="180" ry="26" fill="#274d3a" opacity=".12"/>
+        <!-- Haus -->
+        <g>
+          <rect x="120" y="200" width="220" height="158" rx="10" fill="url(#wall)" stroke="#e4d6bd" stroke-width="2"/>
+          <path d="M104 206 L230 110 L356 206 Z" fill="url(#roof)"/>
+          <rect x="210" y="278" width="40" height="80" rx="6" fill="#2f6f4e"/>
+          <circle cx="242" cy="320" r="3.4" fill="#e7cd92"/>
+          <rect x="150" y="240" width="46" height="46" rx="7" fill="#dcebe0" stroke="#2f6f4e" stroke-width="2.5"/>
+          <rect x="264" y="240" width="46" height="46" rx="7" fill="#dcebe0" stroke="#2f6f4e" stroke-width="2.5"/>
+          <path d="M173 240v46M150 263h46" stroke="#2f6f4e" stroke-width="2"/>
+          <path d="M287 240v46M264 263h46" stroke="#2f6f4e" stroke-width="2"/>
+          <!-- Herz / Glück im Giebel -->
+          <path d="M230 150 c-7-9-18-7-18 2.4 0 6.4 9 11 18 17.6 9-6.6 18-11.2 18-17.6 0-9.4-11-11.4-18-2.4Z" fill="#7cc49b"/>
+        </g>
+        <!-- Los-Ticket -->
+        <g transform="rotate(-12 360 300)">
+          <rect x="300" y="270" width="120" height="64" rx="12" fill="url(#ticket)"/>
+          <circle cx="300" cy="302" r="9" fill="#dcebe0"/>
+          <circle cx="420" cy="302" r="9" fill="#dcebe0"/>
+          <path d="M328 270v64" stroke="#fff" stroke-width="2" stroke-dasharray="4 5" opacity=".7"/>
+          <text x="376" y="298" text-anchor="middle" font-family="Fraunces, serif" font-size="15" font-weight="700" fill="#14271d">MIETLOS</text>
+          <text x="376" y="318" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#14271d" opacity=".75">12× mietfrei</text>
+        </g>
+      </svg>
+
+      <div class="float-card float-card--a">
+        <span class="ic" style="background:var(--green-600)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" aria-hidden="true"><path d="M3 11 12 3l9 8M5 10v9h14v-9" stroke-linejoin="round"/></svg>
+        </span>
+        <span>12 Monate mietfrei<small>monatliche Ziehung</small></span>
+      </div>
+      <div class="float-card float-card--b">
+        <span class="ic" style="background:var(--gold)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#14271d" stroke-width="2" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5ZM6 11v5c0 1 3 3 6 3s6-2 6-3v-5" stroke-linejoin="round"/></svg>
+        </span>
+        <span>Studienförderung<small>Stipendien & Fonds</small></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROBLEM ============ -->
+<section class="section section--sand-soft" id="problem" aria-labelledby="problem-title">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Warum MietLos</span>
+      <h2 id="problem-title">Wohnen ist die zweite Studiengebühr</h2>
+      <p class="lead">Steigende Mieten zwingen viele Studierende in Dresden zu Nebenjobs statt Vorlesungen. MietLos setzt genau hier an – solidarisch finanziert, fair verteilt.</p>
+    </div>
+    <div class="grid grid-3">
+      <article class="card reveal" data-delay="1">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 7h7v7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <h3>Mieten steigen schneller als BAföG</h3>
+        <p>Die Wohnkosten machen für viele Studierende den größten Posten im Monatsbudget aus – mit wenig Spielraum für Unvorhergesehenes.</p>
+      </article>
+      <article class="card reveal" data-delay="2">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <h3>Nebenjob statt Lernzeit</h3>
+        <p>Wer Miete und Lebenshaltung allein stemmt, verliert Zeit fürs Studium. Das verlängert die Studiendauer und erhöht den Druck.</p>
+      </article>
+      <article class="card reveal" data-delay="3">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 11a4 4 0 1 0-8 0M3 21a7 7 0 0 1 18 0" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="0"/></svg></span>
+        <h3>Knapper Wohnraum</h3>
+        <p>Bezahlbare Zimmer sind rar. Eine gemeinschaftliche Lotterie schafft planbare Entlastung – ohne den Markt zu verteuern.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABLAUF ============ -->
+<section class="section section--sand" id="ablauf" aria-labelledby="ablauf-title">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow">So funktioniert's</span>
+      <h2 id="ablauf-title">In vier Schritten zum mietfreien Wohnen</h2>
+      <p class="lead">Transparent von der ersten Spende bis zur Auszahlung. Jeder Beitrag wird nachvollziehbar verwendet.</p>
+    </div>
+    <div class="grid grid-4 steps">
+      <article class="card step reveal" data-delay="1">
+        <span class="step-num">01</span>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M3 11h18" stroke-linecap="round"/></svg></span>
+        <h3>Los sichern</h3>
+        <p>Mit einem kleinen monatlichen Beitrag wirst du Teil der MietLos-Gemeinschaft. Schon ab wenigen Euro im Monat.</p>
+      </article>
+      <article class="card step reveal" data-delay="2">
+        <span class="step-num">02</span>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M4 8h16M6 8c0 8 12 8 12 0" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <h3>Gemeinsamer Topf</h3>
+        <p>Alle Beiträge fließen in einen transparenten Fonds – treuhänderisch verwaltet und unabhängig geprüft.</p>
+      </article>
+      <article class="card step reveal" data-delay="3">
+        <span class="step-num">03</span>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg></span>
+        <h3>Faire Ziehung</h3>
+        <p>In regelmäßigen, öffentlich dokumentierten Ziehungen entscheidet das Los, wer mietfrei wohnen darf.</p>
+      </article>
+      <article class="card step reveal" data-delay="4">
+        <span class="step-num">04</span>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <h3>Wirkung entfalten</h3>
+        <p>Überschüsse fließen in Stipendien und soziale Projekte. So gewinnt die ganze Studierendenschaft.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GEWINNE ============ -->
+<section class="section section--sand-soft" id="gewinne" aria-labelledby="gewinne-title">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Gewinne & Förderung</span>
+      <h2 id="gewinne-title">Was du gewinnen kannst</h2>
+      <p class="lead">Bei MietLos gewinnst du nicht nur selbst – jeder Beitrag fördert zugleich Studierende in Dresden.</p>
+    </div>
+    <div class="grid grid-2">
+      <article class="prize featured reveal" data-delay="1">
+        <span class="medal"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11 12 3l9 8M5 10v9h14v-9" stroke-linejoin="round"/></svg></span>
+        <div>
+          <h3>Hauptgewinn</h3>
+          <p class="big">12 Monate mietfrei wohnen</p>
+          <p>Ein ganzes Jahr ohne Mietzahlung – planbar, sicher und ohne Kleingedrucktes. Mehr Zeit fürs Studium, weniger finanzieller Druck.</p>
+        </div>
+      </article>
+      <article class="prize reveal" data-delay="2">
+        <span class="medal"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5ZM6 11v5c0 1 3 3 6 3s6-2 6-3v-5" stroke-linejoin="round"/></svg></span>
+        <div>
+          <h4>Monatliche Stipendien</h4>
+          <p class="big">Studienförderung</p>
+          <p>Regelmäßige Förderbeträge für Lernmaterial, Semesterbeiträge und Lebenshaltung.</p>
+        </div>
+      </article>
+      <article class="prize reveal" data-delay="2">
+        <span class="medal"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+        <div>
+          <h4>Förderfonds</h4>
+          <p class="big">Soziale Projekte</p>
+          <p>Ein Teil der Überschüsse stärkt Wohn- und Bildungsprojekte vor Ort in Dresden.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRANSPARENZ ============ -->
+<section class="section section--dark" id="transparenz" aria-labelledby="transparenz-title">
+  <div class="wave-top" aria-hidden="true">
+    <svg viewBox="0 0 1440 90" preserveAspectRatio="none"><path d="M0,40 C360,90 1080,0 1440,50 L1440,0 L0,0 Z" fill="#f7f1e6"/></svg>
+  </div>
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Transparenz</span>
+      <h2 id="transparenz-title">Jeder Euro hat ein Ziel</h2>
+      <p class="lead">Als gemeinnützige Soziallotterie legen wir offen, wohin die Mittel fließen. Die Aufteilung wird jährlich geprüft und veröffentlicht.</p>
+    </div>
+    <div class="transparency">
+      <div class="donut-wrap reveal">
+        <div class="donut" role="img" aria-label="Mittelverwendung: 42 Prozent mietfreies Wohnen, 38 Prozent Studienförderung und soziale Projekte, 20 Prozent Betrieb und Verwaltung">
+          <div class="donut-center"><div><strong>100 %</strong><span>transparent verteilt</span></div></div>
+        </div>
+      </div>
+      <ul class="legend reveal" data-delay="1">
+        <li>
+          <span class="swatch" style="background:var(--green-600)"></span>
+          <span class="key">Mietfreies Wohnen<small>Direkte Gewinne für Studierende</small></span>
+          <strong>42 %</strong>
+        </li>
+        <li>
+          <span class="swatch" style="background:var(--gold)"></span>
+          <span class="key">Studienförderung & soziale Projekte<small>Stipendien, Förderfonds, Bildungsprojekte</small></span>
+          <strong>38 %</strong>
+        </li>
+        <li>
+          <span class="swatch" style="background:var(--green-300)"></span>
+          <span class="key">Betrieb & Verwaltung<small>Treuhand, Prüfung, Plattform</small></span>
+          <strong>20 %</strong>
+        </li>
+      </ul>
+    </div>
+
+    <div class="stats reveal" style="margin-top:var(--space-8)" data-delay="2">
+      <div class="stat"><div class="num" data-count="80" data-suffix=" %">0</div><div class="label">der Mittel für Wohnen & Förderung</div></div>
+      <div class="stat"><div class="num" data-count="12" data-suffix="×">0</div><div class="label">mietfreie Monate pro Hauptgewinn</div></div>
+      <div class="stat"><div class="num" data-count="1" data-prefix="" data-suffix=" Stadt">0</div><div class="label">Start in Dresden, gedacht für mehr</div></div>
+      <div class="stat"><div class="num" data-count="100" data-suffix=" %">0</div><div class="label">gemeinnützig & geprüft</div></div>
+    </div>
+  </div>
+  <div class="wave-bottom" aria-hidden="true">
+    <svg viewBox="0 0 1440 90" preserveAspectRatio="none"><path d="M0,50 C360,0 1080,90 1440,40 L1440,90 L0,90 Z" fill="#f7f1e6"/></svg>
+  </div>
+</section>
+
+<!-- ============ PARTNER ============ -->
+<section class="section section--dark" id="partner" aria-labelledby="partner-title" style="background:linear-gradient(180deg,var(--green-900),var(--green-800));">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Für Partner</span>
+      <h2 id="partner-title">Gemeinsam Wirkung schaffen</h2>
+      <p class="lead">MietLos entsteht im engen Austausch mit Verwaltung, Finanzpartnern und einem unabhängigen Beirat. Werden Sie Teil der Gründungsphase.</p>
+    </div>
+    <div class="grid grid-4">
+      <article class="partner-card reveal" data-delay="1">
+        <span class="icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6" stroke-linejoin="round"/></svg></span>
+        <h3>Behörden & GGL</h3>
+        <p>Wir entwickeln MietLos rechtssicher und im Dialog mit den zuständigen Stellen – auf Erlaubnis nach dem Glücksspielstaatsvertrag ausgerichtet.</p>
+        <a class="textlink" href="#newsletter">Dialog aufnehmen <span aria-hidden="true">→</span></a>
+      </article>
+      <article class="partner-card reveal" data-delay="2">
+        <span class="icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4" stroke-linecap="round"/></svg></span>
+        <h3>Banken</h3>
+        <p>Für treuhänderische Verwaltung und sichere Zahlungsabwicklung suchen wir verlässliche Finanzpartner mit sozialem Anspruch.</p>
+        <a class="textlink" href="#newsletter">Partner werden <span aria-hidden="true">→</span></a>
+      </article>
+      <article class="partner-card reveal" data-delay="3">
+        <span class="icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V9l8-5 8 5v10M4 19h16M9 19v-5h6v5" stroke-linejoin="round"/><path d="M12 4v3" stroke-linecap="round"/></svg></span>
+        <h3>Investor:innen</h3>
+        <p>Impact mit Substanz: Unterstützen Sie den Aufbau einer skalierbaren, gemeinwohlorientierten Soziallotterie.</p>
+        <a class="textlink" href="#newsletter">Pitch anfragen <span aria-hidden="true">→</span></a>
+      </article>
+      <article class="partner-card reveal" data-delay="4">
+        <span class="icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20a6 6 0 0 1 12 0M14.5 20a4.5 4.5 0 0 1 6.5-4" stroke-linecap="round"/></svg></span>
+        <h3>Beirat</h3>
+        <p>Wir bauen einen unabhängigen Beirat aus Wissenschaft, Sozialwesen und Studierendenschaft auf. Kandidat:innen willkommen.</p>
+        <a class="textlink" href="#newsletter">Mitwirken <span aria-hidden="true">→</span></a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section section--sand-soft" id="faq" aria-labelledby="faq-title">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Häufige Fragen</span>
+      <h2 id="faq-title">Gut zu wissen</h2>
+      <p class="lead">Die wichtigsten Antworten rund um MietLos – ergänzt fortlaufend während der Gründungsphase.</p>
+    </div>
+    <div class="faq">
+      <details class="faq-item reveal" name="faq" open>
+        <summary class="faq-q">Was genau ist MietLos?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>MietLos ist eine gemeinnützige Soziallotterie in Gründung. Mit monatlichen Beiträgen finanziert die Gemeinschaft mietfreies Wohnen und Studienförderung für Studierende in Dresden. Überschüsse fließen in soziale und Bildungsprojekte.</p></div>
+      </details>
+      <details class="faq-item reveal" name="faq">
+        <summary class="faq-q">Ist das schon nutzbar?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>MietLos befindet sich aktuell in der Gründungsphase. Wir arbeiten an der nötigen Erlaubnis, an Partnerschaften und der technischen Umsetzung. Über den Newsletter informieren wir, sobald der Start bevorsteht.</p></div>
+      </details>
+      <details class="faq-item reveal" name="faq">
+        <summary class="faq-q">Wer kann teilnehmen?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>Geplant ist eine Teilnahme für volljährige Personen, die das Projekt unterstützen möchten. Die Förderung richtet sich an Studierende in Dresden. Die genauen Teilnahmebedingungen veröffentlichen wir vor dem Start.</p></div>
+      </details>
+      <details class="faq-item reveal" name="faq">
+        <summary class="faq-q">Wie wird Transparenz sichergestellt?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>Die Mittelverwendung wird jährlich offengelegt und unabhängig geprüft. Ziehungen werden dokumentiert. Ein unabhängiger Beirat begleitet das Projekt.</p></div>
+      </details>
+      <details class="faq-item reveal" name="faq">
+        <summary class="faq-q">Ist MietLos gemeinnützig?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>Ja. MietLos ist als gemeinnützige Gesellschaft angelegt. Der Zweck ist die Förderung von Wohnen und Bildung – nicht die Gewinnerzielung.</p></div>
+      </details>
+      <details class="faq-item reveal" name="faq">
+        <summary class="faq-q">Wie kann ich unterstützen?<span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
+        <div class="faq-a"><p>Trag dich in den Newsletter ein, um zum Start informiert zu werden. Partner, Investor:innen und Beirats-Kandidat:innen erreichen uns über die Kontaktwege unten.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NEWSLETTER / CTA ============ -->
+<section class="section" id="newsletter" aria-labelledby="newsletter-title">
+  <div class="container">
+    <div class="cta-band reveal">
+      <div style="max-width:40rem">
+        <span class="eyebrow" style="color:var(--green-300)">Bleib informiert</span>
+        <h2 id="newsletter-title">Sei dabei, wenn MietLos startet</h2>
+        <p class="lead">Erfahre als Erste:r vom Start, von Ziehungsterminen und Fördermöglichkeiten. Kein Spam – nur relevante Updates aus der Gründungsphase.</p>
+      </div>
+      <form class="newsletter-form" id="newsletterForm" novalidate>
+        <div class="field">
+          <label class="sr-only" for="email">E-Mail-Adresse</label>
+          <input type="email" id="email" name="email" placeholder="deine@email.de" autocomplete="email" required aria-describedby="formMsg" />
+        </div>
+        <button class="btn btn--gold btn--lg" type="submit">Anmelden <span class="arrow" aria-hidden="true">→</span></button>
+      </form>
+      <label class="consent">
+        <input type="checkbox" id="consent" name="consent" required />
+        <span>Ich möchte den MietLos-Newsletter erhalten und stimme der Verarbeitung meiner E-Mail-Adresse gemäß <a href="#datenschutz">Datenschutzerklärung</a> zu. Abmeldung jederzeit möglich.</span>
+      </label>
+      <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer" id="kontakt">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top" aria-label="MietLos Startseite">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <rect width="64" height="64" rx="15" fill="#274d3a"/>
+            <path d="M15 34 L32 19 L49 34 L49 49 L15 49 Z" fill="none" stroke="#e9dcc3" stroke-width="3.4" stroke-linejoin="round"/>
+            <path d="M32 40.5 c-3-4-7.4-3-7.4 .8 0 2.8 3.6 5 7.4 7.7 3.8-2.7 7.4-4.9 7.4-7.7 0-3.8-4.4-4.8-7.4-.8Z" fill="#7cc49b"/>
+          </svg>
+          <span>MietLos<small>Soziallotterie Dresden</small></span>
+        </a>
+        <p>Die gemeinnützige Soziallotterie für mietfreies Wohnen und Studienförderung in Dresden. Solidarisch finanziert, transparent verteilt.</p>
+        <span class="founding-note"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg> In Gründung 2026</span>
+      </div>
+      <nav class="footer-links" aria-label="Seiten">
+        <h4>Projekt</h4>
+        <ul>
+          <li><a href="#problem">Warum MietLos</a></li>
+          <li><a href="#ablauf">So funktioniert's</a></li>
+          <li><a href="#gewinne">Gewinne</a></li>
+          <li><a href="#transparenz">Transparenz</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-links" aria-label="Mitmachen">
+        <h4>Mitmachen</h4>
+        <ul>
+          <li><a href="#partner">Für Partner</a></li>
+          <li><a href="#newsletter">Newsletter</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="mailto:kontakt@mietlos.de">kontakt@mietlos.de</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-links" aria-label="Rechtliches">
+        <h4>Rechtliches</h4>
+        <ul>
+          <li><a href="#impressum" id="impressumLink">Impressum</a></li>
+          <li><a href="#datenschutz" id="datenschutzLink">Datenschutz</a></li>
+          <li><a href="#agb">Teilnahmebedingungen</a></li>
+          <li><a href="#" id="cookieSettings">Cookie-Einstellungen</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-bottom">
+      <p>© <span id="year">2026</span> MietLos gemeinnützige UG (in Gründung) · Dresden. Alle Angaben vorläufig, Stand Gründungsphase.</p>
+      <div class="social">
+        <a href="#" aria-label="MietLos auf Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+        <a href="#" aria-label="MietLos auf LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4M11 17v-7" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a href="mailto:kontakt@mietlos.de" aria-label="MietLos per E-Mail kontaktieren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<button class="to-top" id="toTop" aria-label="Nach oben scrollen">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 14 6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+
+<!-- ============ COOKIE BANNER (Platzhalter) ============ -->
+<aside class="cookie" id="cookieBanner" role="dialog" aria-labelledby="cookieTitle" aria-describedby="cookieDesc" aria-modal="false">
+  <h4 id="cookieTitle">Datenschutz & Cookies</h4>
+  <p id="cookieDesc">Diese Seite nutzt aktuell nur technisch notwendige Speicherung. Sollten künftig Analyse- oder Marketing-Dienste dazukommen, kannst du sie hier verwalten. Mehr in unserer <a href="#datenschutz">Datenschutzerklärung</a>.</p>
+  <div class="cookie-actions">
+    <button class="btn" id="cookieAccept" type="button">Verstanden</button>
+    <button class="btn btn--ghost" id="cookieDecline" type="button">Nur notwendige</button>
+  </div>
+</aside>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---- Sticky-Header Schatten ab Scroll ---- */
+  var header = document.getElementById("siteHeader");
+  var toTop = document.getElementById("toTop");
+  function onScroll(){
+    var y = window.scrollY || window.pageYOffset;
+    header.classList.toggle("scrolled", y > 8);
+    toTop.classList.toggle("show", y > 600);
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+  onScroll();
+
+  /* ---- Mobile-Navigation ---- */
+  var toggle = document.getElementById("navToggle");
+  toggle.addEventListener("click", function(){
+    var open = header.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", open ? "Menü schließen" : "Menü öffnen");
+  });
+  document.getElementById("navLinks").addEventListener("click", function(e){
+    if(e.target.closest("a")){
+      header.classList.remove("open");
+      toggle.setAttribute("aria-expanded","false");
+    }
+  });
+
+  /* ---- Back to top ---- */
+  toTop.addEventListener("click", function(){
+    window.scrollTo({top:0, behavior: reduceMotion ? "auto" : "smooth"});
+  });
+
+  /* ---- Scroll-Reveal (staggered) ---- */
+  var reveals = document.querySelectorAll(".reveal");
+  if("IntersectionObserver" in window && !reduceMotion){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, {threshold:0.12, rootMargin:"0px 0px -8% 0px"});
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---- Zahlen hochzählen ---- */
+  var counters = document.querySelectorAll("[data-count]");
+  function animateCount(el){
+    var target = parseFloat(el.getAttribute("data-count"));
+    var prefix = el.getAttribute("data-prefix") || "";
+    var suffix = el.getAttribute("data-suffix") || "";
+    if(reduceMotion){ el.textContent = prefix + target + suffix; return; }
+    var start = 0, dur = 1400, t0 = null;
+    function step(ts){
+      if(!t0) t0 = ts;
+      var p = Math.min((ts - t0)/dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = prefix + Math.round(eased * target) + suffix;
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  if("IntersectionObserver" in window){
+    var co = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ animateCount(en.target); co.unobserve(en.target); }
+      });
+    }, {threshold:0.5});
+    counters.forEach(function(el){ co.observe(el); });
+  } else {
+    counters.forEach(animateCount);
+  }
+
+  /* ---- Donut: animiertes Befüllen ---- */
+  var donut = document.querySelector(".donut");
+  if(donut && "IntersectionObserver" in window && !reduceMotion){
+    var dObs = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          en.target.animate(
+            [{filter:"grayscale(1) opacity(.4)"},{filter:"none"}],
+            {duration:900, easing:"ease-out"}
+          );
+          dObs.unobserve(en.target);
+        }
+      });
+    }, {threshold:0.4});
+    dObs.observe(donut);
+  }
+
+  /* ---- Newsletter-Validierung (clientseitig, Demo) ---- */
+  var form = document.getElementById("newsletterForm");
+  var msg = document.getElementById("formMsg");
+  var emailInput = document.getElementById("email");
+  var consent = document.getElementById("consent");
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    var email = emailInput.value.trim();
+    var valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if(!valid){
+      msg.textContent = "Bitte gib eine gültige E-Mail-Adresse ein.";
+      msg.className = "form-msg err";
+      emailInput.focus();
+      return;
+    }
+    if(!consent.checked){
+      msg.textContent = "Bitte bestätige die Einwilligung zum Newsletter.";
+      msg.className = "form-msg err";
+      consent.focus();
+      return;
+    }
+    msg.textContent = "Danke! Wir melden uns, sobald MietLos startet.";
+    msg.className = "form-msg ok";
+    form.reset();
+    consent.checked = false;
+  });
+
+  /* ---- Cookie-Banner (Platzhalter, localStorage) ---- */
+  var banner = document.getElementById("cookieBanner");
+  var KEY = "mietlos_cookie_choice";
+  function hideBanner(){ banner.classList.remove("show"); }
+  function showBanner(){ banner.classList.add("show"); }
+  try{
+    if(!localStorage.getItem(KEY)){
+      setTimeout(showBanner, 1200);
+    }
+  }catch(err){ setTimeout(showBanner, 1200); }
+  function choose(val){
+    try{ localStorage.setItem(KEY, val); }catch(err){}
+    hideBanner();
+  }
+  document.getElementById("cookieAccept").addEventListener("click", function(){ choose("all"); });
+  document.getElementById("cookieDecline").addEventListener("click", function(){ choose("necessary"); });
+  document.getElementById("cookieSettings").addEventListener("click", function(e){
+    e.preventDefault(); showBanner();
+  });
+
+  /* ---- Jahr im Footer ---- */
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  /* ---- Aktiver Nav-Link via Scroll-Spy ---- */
+  var sections = ["problem","ablauf","gewinne","transparenz","partner","faq"];
+  var navMap = {};
+  document.querySelectorAll(".nav-links a").forEach(function(a){
+    var id = a.getAttribute("href").slice(1);
+    navMap[id] = a;
+  });
+  if("IntersectionObserver" in window){
+    var sObs = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        var a = navMap[en.target.id];
+        if(a && en.isIntersecting){
+          document.querySelectorAll(".nav-links a").forEach(function(x){ x.style.color=""; x.style.background=""; });
+          a.style.color = "var(--green-800)";
+          a.style.background = "rgba(47,111,78,.1)";
+        }
+      });
+    }, {threshold:0.5});
+    sections.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) sObs.observe(el);
+    });
+  }
+})();
+</script>
+</body>
+</html>
