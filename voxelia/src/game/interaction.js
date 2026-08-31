@@ -769,6 +769,7 @@ export class Interaction extends EventBus {
       const above = world.getBlock(tx, upper, tz);
       if (above !== 0 && !isReplaceable(above)) {
         this.emit('message', 'Über der Tür ist kein Platz.');
+        this.placeCooldown = PLACE_COOLDOWN;
         return false;
       }
     }
@@ -817,8 +818,9 @@ export class Interaction extends EventBus {
   _isMergePlacement(blockId, state, hit) {
     if (hit.blockId !== blockId) return false;
     const def = blockDef(blockId);
-    if (def.render === RENDER.SLAB) return state === 2;
+    // Snow shares the slab render kind, so it has to be tested first.
     if (def.name === 'snow_layer') return state > (this.getBlockState(hit.x, hit.y, hit.z) & 7);
+    if (def.render === RENDER.SLAB) return state === 2;
     return false;
   }
 
@@ -880,6 +882,16 @@ export class Interaction extends EventBus {
       return 0;
     }
 
+    if (name === 'snow_layer') {
+      // Snow uses the slab shape table but stacks in eight steps instead of
+      // turning into a double slab, so it is handled before the render switch.
+      if (hit.blockId === blockId) {
+        const existing = this.getBlockState(hit.x, hit.y, hit.z) & 7;
+        return Math.min(7, existing + 1);
+      }
+      return 0;
+    }
+
     switch (def.render) {
       case RENDER.SLAB: {
         // Clicking an existing matching slab doubles it.
@@ -926,13 +938,6 @@ export class Interaction extends EventBus {
     if (name.endsWith('_fence_gate')) {
       return (lookFacing << 2) & 0xc;
     }
-    if (name === 'snow_layer') {
-      if (hit.blockId === blockId) {
-        const existing = this.getBlockState(hit.x, hit.y, hit.z) & 7;
-        return Math.min(7, existing + 1);
-      }
-      return 0;
-    }
     if (name === 'lever' || name.endsWith('_button')) {
       const wall = FACE_TO_TORCH[face];
       return wall === undefined || wall < 0 ? 0 : wall;
@@ -972,9 +977,13 @@ export class Interaction extends EventBus {
     if (neighbourId === 0) return false;
     const self = blockDef(blockId);
     const other = blockDef(neighbourId);
-    if (other.render === self.render) return true;
-    if (other.name.endsWith('_fence_gate')) return true;
-    return other.opaque && other.solid && other.render === RENDER.CUBE;
+    const fullCube = other.opaque && other.solid && other.render === RENDER.CUBE;
+    if (self.render === RENDER.PANE) {
+      return other.render === RENDER.PANE || fullCube;
+    }
+    // Fences and gates are MODEL-rendered, so they are matched by name.
+    if (other.name.endsWith('_fence') || other.name.endsWith('_fence_gate')) return true;
+    return fullCube;
   }
 
   /**
@@ -1185,28 +1194,33 @@ export class Interaction extends EventBus {
   }
 
   /**
-   * Turn an unsupported gravity block into a falling entity.
+   * Turn unsupported gravity blocks into falling entities, walking up the whole
+   * column so a mined pillar of sand collapses at once.
    * @param {number} x block X
-   * @param {number} y block Y
+   * @param {number} y block Y of the lowest candidate
    * @param {number} z block Z
-   * @returns {boolean} true when the block started falling
+   * @returns {number} how many blocks started falling
    * @private
    */
   _checkFalling(x, y, z) {
     const world = this.world;
     const entities = this.entities;
-    if (!world || !entities || typeof entities.spawnFallingBlock !== 'function') return false;
-    if (y - 1 < WORLD_MIN_Y) return false;
-    const id = world.getBlock(x, y, z);
-    if (id === 0 || !hasGravity(id)) return false;
+    if (!world || !entities || typeof entities.spawnFallingBlock !== 'function') return 0;
+    if (y - 1 < WORLD_MIN_Y) return 0;
     const below = world.getBlock(x, y - 1, z);
-    if (below !== 0 && !isReplaceable(below)) return false;
+    if (below !== 0 && !isReplaceable(below)) return 0;
 
-    const state = this.getBlockState(x, y, z);
-    if (!world.setBlock(x, y, z, 0)) return false;
-    this.setBlockState(x, y, z, 0);
-    entities.spawnFallingBlock(x, y, z, id, state);
-    return true;
+    let fallen = 0;
+    for (let cy = y; cy < y + 64 && cy < WORLD_MAX_Y; cy++) {
+      const id = world.getBlock(x, cy, z);
+      if (id === 0 || !hasGravity(id)) break;
+      const state = this.getBlockState(x, cy, z);
+      if (!world.setBlock(x, cy, z, 0)) break;
+      this.setBlockState(x, cy, z, 0);
+      entities.spawnFallingBlock(x, cy, z, id, state);
+      fallen++;
+    }
+    return fallen;
   }
 
   /* ===================================================================== */

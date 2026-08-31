@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>texture dump</title></head><body>
+<canvas id="gl" width="64" height="64"></canvas>
+<script type="module">
+/* Generates the procedural texture arrays and reads individual layers back to
+   PNG data URLs, so texture orientation and content can be inspected directly
+   instead of inferred from a rendered scene. */
+import { GL } from '../src/core/gl.js';
+import { Settings } from '../src/core/settings.js';
+import { TextureManager } from '../src/render/textures.js';
+import { MATERIAL_INDEX } from '../src/world/materials.js';
+import { registerCommonChunks } from '../src/render/shaders/common.glsl.js';
+
+const D = window.__dump = { ready: false, images: {}, error: null, names: [] };
+try {
+  const settings = new Settings({ autoLoad: false, storageKey: 'voxelia.dump' });
+  const res = Number(new URLSearchParams(location.search).get('tex') || 128);
+  settings.set('textureResolution', res);
+  const gl = new GL(document.getElementById('gl'), {});
+  // The generator shader uses #include <math> / <noise>; the renderer registers
+  // these during init, so a standalone harness must do it too.
+  registerCommonChunks(gl);
+  const tm = new TextureManager(gl, settings);
+  await tm.generate(() => {});
+
+  const raw = gl.gl;
+  const fbo = raw.createFramebuffer();
+  const out = document.createElement('canvas');
+  out.width = out.height = res;
+  const ctx = out.getContext('2d');
+
+  /** Read one layer of a texture array back into a PNG data URL. */
+  function readLayer(tex, layer) {
+    raw.bindFramebuffer(raw.FRAMEBUFFER, fbo);
+    raw.framebufferTextureLayer(raw.FRAMEBUFFER, raw.COLOR_ATTACHMENT0, tex, 0, layer);
+    if (raw.checkFramebufferStatus(raw.FRAMEBUFFER) !== raw.FRAMEBUFFER_COMPLETE) return null;
+    const px = new Uint8Array(res * res * 4);
+    raw.readPixels(0, 0, res, res, raw.RGBA, raw.UNSIGNED_BYTE, px);
+    // readPixels returns rows bottom-up; ImageData is top-down. Flip so the PNG
+    // shows the texture the way v increases downward in sampling space.
+    const img = ctx.createImageData(res, res);
+    for (let y = 0; y < res; y++) {
+      const src = (res - 1 - y) * res * 4;
+      img.data.set(px.subarray(src, src + res * 4), y * res * 4);
+    }
+    ctx.putImageData(img, 0, 0);
+    return out.toDataURL('image/png');
+  }
+
+  const want = (new URLSearchParams(location.search).get('names') ||
+    'grass_block_side,grass_block_top,short_grass,dandelion,poppy,oak_log,oak_planks,oak_leaves,stone,cobblestone,diamond_ore,water_still')
+    .split(',');
+  for (const name of want) {
+    const layer = MATERIAL_INDEX.get(name);
+    if (layer === undefined) { D.images[name] = null; continue; }
+    D.images[name] = readLayer(tm.albedoArray, layer);
+    D.names.push(name);
+  }
+  D.ready = true;
+} catch (e) { D.error = (e && (e.stack || e.message)) || String(e); }
+</script></body></html>
