@@ -46,17 +46,28 @@ export const CHROME_ARGS = [
  * @returns {Promise<any>} the predicate's truthy value
  */
 export async function waitAlive(page, predicate, opts = {}) {
-  const timeout = opts.timeout ?? 900000
-  const poll = opts.poll ?? 1500
+  const timeout = opts.timeout ?? 1800000
+  const poll = opts.poll ?? 3000
+  // Forcing a composite costs a FULL software frame, which can take tens of
+  // seconds. So do it rarely: often enough to un-throttle an idle rAF loop,
+  // never often enough to starve the loop we are trying to keep alive.
+  const compositeEvery = opts.compositeEvery ?? 6
   const deadline = Date.now() + timeout
+  const t0 = Date.now()
   let ticks = 0
   while (Date.now() < deadline) {
     let v
     try { v = await page.evaluate(predicate) } catch { v = null }
     if (v) return v
-    // A 1x1 screenshot is the cheapest way to demand a compositor frame.
-    try { await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 }, timeout: 60000 }) } catch {}
-    if (opts.onTick && (++ticks % 10 === 0)) await opts.onTick(ticks)
+    ticks++
+    if (compositeEvery > 0 && ticks % compositeEvery === 0) {
+      try { await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 }, timeout: 20000 }) } catch {}
+    }
+    if (opts.verbose && ticks % 10 === 0) {
+      let extra = ''
+      if (opts.status) { try { extra = ' ' + JSON.stringify(await page.evaluate(opts.status)) } catch {} }
+      console.log(`    … ${((Date.now() - t0) / 1000) | 0}s waiting for ${opts.label || 'condition'}${extra}`)
+    }
     await page.waitForTimeout(poll)
   }
   throw new Error(`waitAlive timed out after ${(timeout / 1000) | 0}s${opts.label ? ': ' + opts.label : ''}`)

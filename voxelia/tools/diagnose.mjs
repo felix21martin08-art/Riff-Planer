@@ -22,10 +22,16 @@ page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0
 
 await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded', timeout: 120000 })
 console.log('waiting for the menu …')
-await waitAlive(page, () => window.game && window.game.state === 'menu', { label: 'menu' })
+await waitAlive(page, () => window.game && window.game.state === 'menu', {
+  label: 'menu', verbose: true,
+  status: () => ({ ready: !!window.game, state: window.game && window.game.state, boot: (document.getElementById('boot-status') || {}).textContent }),
+})
 console.log('menu reached; creating world …')
 await page.evaluate(() => window.game.startWorld({ seed: 1337, name: 'diag', gameMode: 'survival' }))
-await waitAlive(page, () => window.game.state === 'playing', { label: 'playing' })
+await waitAlive(page, () => window.game.state === 'playing', {
+  label: 'playing', verbose: true,
+  status: () => ({ state: window.game.state, chunks: (() => { try { return window.game.world.getStats().loaded } catch { return null } })() }),
+})
 
 console.log('streaming …')
 await page.evaluate(async () => {
