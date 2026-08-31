@@ -17,7 +17,12 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(ROOT, 'src')
 
-/** Strip comments and string/template literals so regexes cannot match inside them. */
+/**
+ * Strip comments only. String contents are PRESERVED, because import
+ * specifiers live inside strings — blanking them made this checker silently
+ * match nothing. Strings are still scanned past correctly so that a quote
+ * inside a comment (or a comment marker inside a string) cannot desync us.
+ */
 function strip(src) {
   let out = ''
   let i = 0
@@ -25,20 +30,33 @@ function strip(src) {
   while (i < n) {
     const c = src[i]
     const d = src[i + 1]
-    if (c === '/' && d === '/') { while (i < n && src[i] !== '\n') i++; continue }
-    if (c === '/' && d === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue }
+    if (c === '/' && d === '/') { while (i < n && src[i] !== '\n') { out += src[i] === '\n' ? '\n' : ' '; i++ } continue }
+    if (c === '/' && d === '*') {
+      i += 2
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { out += src[i] === '\n' ? '\n' : ' '; i++ }
+      i += 2
+      continue
+    }
     if (c === '"' || c === "'" || c === '`') {
       const q = c
       out += q
       i++
       while (i < n) {
-        if (src[i] === '\\') { i += 2; continue }
+        if (src[i] === '\\') { out += src[i] + (src[i + 1] || ''); i += 2; continue }
         if (src[i] === q) break
         if (q === '`' && src[i] === '$' && src[i + 1] === '{') {
-          let depth = 1; i += 2
-          while (i < n && depth > 0) { if (src[i] === '{') depth++; else if (src[i] === '}') depth--; i++ }
+          let depth = 1
+          out += '${'
+          i += 2
+          while (i < n && depth > 0) {
+            if (src[i] === '{') depth++
+            else if (src[i] === '}') depth--
+            out += src[i]
+            i++
+          }
           continue
         }
+        out += src[i]
         i++
       }
       out += q
@@ -94,6 +112,7 @@ for (const file of files) {
   if (/export\s+default/.test(src)) exports.add('default')
 
   const imports = []
+  const dynamic = []
   const re = /(?:^|[\s;}])import\s+(?:([^'"]*?)\s+from\s*)?['"]([^'"]+)['"]/g
   for (const m of src.matchAll(re)) {
     const clause = (m[1] || '').trim()
@@ -117,10 +136,17 @@ for (const file of files) {
     }
     imports.push({ spec, names, ns, def, raw: m[0].trim().slice(0, 90) })
   }
-  // dynamic import() and new Worker(new URL(...))
+  // new Worker(new URL('./x.js', import.meta.url))
   for (const m of src.matchAll(/new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)) imports.push({ spec: m[1], names: [], ns: null, def: null, raw: 'new Worker URL' })
+  // dynamic import('./x.js') — comments are already stripped, so JSDoc
+  // import() type annotations do not reach here. A dynamic import that is
+  // guarded with .catch() is intentional lazy loading and only warns.
+  for (const m of src.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    const tail = src.slice(m.index, m.index + 400)
+    dynamic.push({ spec: m[1], guarded: /\.catch\s*\(/.test(tail) || /try\s*\{/.test(src.slice(Math.max(0, m.index - 200), m.index)) })
+  }
 
-  info.set(file, { exports, reExports, star, imports, lines: raw.split('\n').length, bytes: raw.length })
+  info.set(file, { exports, reExports, star, imports, dynamic, lines: raw.split('\n').length, bytes: raw.length })
 }
 
 function resolve(fromFile, spec) {
@@ -147,7 +173,15 @@ function exportsOf(file, seen = new Set()) {
 
 const problems = []
 const bare = []
+const lazy = []
 for (const [file, rec] of info) {
+  for (const d of rec.dynamic) {
+    if (!d.spec.startsWith('.')) continue
+    if (resolve(file, d.spec)) continue
+    const msg = `${path.relative(ROOT, file)}: dynamic import '${d.spec}' does not resolve`
+    if (d.guarded) lazy.push(msg + ' (guarded — lazy load, ok once it exists)')
+    else problems.push(msg)
+  }
   for (const imp of rec.imports) {
     if (!imp.spec.startsWith('.')) {
       if (!/^(node:|https?:)/.test(imp.spec)) bare.push(`${path.relative(ROOT, file)}: bare import '${imp.spec}'`)
@@ -193,13 +227,14 @@ for (const f of info.keys()) dfs(f, [])
 const totals = { files: info.size, lines: 0, bytes: 0 }
 for (const r of info.values()) { totals.lines += r.lines; totals.bytes += r.bytes }
 
-const out = { ok: problems.length === 0 && bare.length === 0, totals, problems, bareImports: bare, cycles: [...new Set(cycles)].slice(0, 20) }
+const out = { ok: problems.length === 0 && bare.length === 0, totals, problems, bareImports: bare, lazy, cycles: [...new Set(cycles)].slice(0, 20) }
 if (argvHas('--json')) console.log(JSON.stringify(out, null, 1))
 else {
   console.log(`files=${totals.files} lines=${totals.lines} size=${(totals.bytes / 1024).toFixed(0)}KB`)
   if (bare.length) { console.log('\nBARE IMPORTS (not allowed):'); bare.forEach(p => console.log('  ' + p)) }
   if (problems.length) { console.log(`\nPROBLEMS (${problems.length}):`); problems.forEach(p => console.log('  ' + p)) }
   else console.log('\nNo import/export mismatches.')
+  if (lazy.length) { console.log(`\nPENDING LAZY IMPORTS (${lazy.length}):`); lazy.forEach(p => console.log('  ' + p)) }
   if (out.cycles.length) { console.log(`\nCIRCULAR IMPORTS (${out.cycles.length}):`); out.cycles.forEach(c => console.log('  ' + c)) }
 }
 function argvHas(f) { return process.argv.includes(f) }

@@ -27,6 +27,8 @@ const SECONDS = Number(arg('seconds', 12))
 const SHOTS = arg('shots', null)
 const URL_PATH = arg('url', '/index.html')
 const INJECT = arg('script', null)
+/** Substrings of request paths whose 404s are expected (module not built yet). */
+const ALLOW_404 = String(arg('allow404', '')).split(',').filter(Boolean)
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -79,8 +81,15 @@ page.on('console', msg => {
   else logs.push(`[${t}] ${text}`)
 })
 page.on('pageerror', e => errors.push('PAGEERROR: ' + (e.stack || e.message)))
-page.on('requestfailed', r => failedRequests.push(`${r.method()} ${r.url().replace(base, '')} :: ${r.failure()?.errorText}`))
-page.on('response', r => { if (r.status() >= 400) failedRequests.push(`${r.status()} ${r.url().replace(base, '')}`) })
+const allowed = u => ALLOW_404.some(a => u.includes(a))
+page.on('requestfailed', r => {
+  const u = r.url().replace(base, '')
+  if (!allowed(u)) failedRequests.push(`${r.method()} ${u} :: ${r.failure()?.errorText}`)
+})
+page.on('response', r => {
+  const u = r.url().replace(base, '')
+  if (r.status() >= 400 && !allowed(u)) failedRequests.push(`${r.status()} ${u}`)
+})
 
 // Surface uncaught promise rejections and WebGL errors from inside the page.
 await page.addInitScript(() => {
@@ -141,7 +150,8 @@ while (Date.now() < deadline) {
   await page.waitForTimeout(1000)
   if (SHOTS && SHOTS !== true && (Date.now() - t0) > 3000) {
     const p = path.join(SHOTS, `frame-${String(++shot).padStart(2, '0')}.png`)
-    try { await page.screenshot({ path: p }) } catch {}
+    try { await page.screenshot({ path: p, timeout: 120000, animations: 'allow' }) }
+    catch (e) { warnings.push('screenshot failed: ' + e.message.split('\n')[0]) }
   }
 }
 
@@ -160,6 +170,13 @@ const probe = await page.evaluate(() => {
     }
   } catch (e) { pixels = { error: String(e) } }
   return {
+    probe: window.__probe ? {
+      stage: window.__probe.stage, ready: window.__probe.ready,
+      frames: window.__probe.frames, fps: window.__probe.fps,
+      avgFrameMs: window.__probe.avgFrameMs, initMs: Math.round(window.__probe.initMs || 0),
+      camera: window.__probe.camera, chunks: window.__probe.chunks,
+      errors: window.__probe.errors.slice(0, 8),
+    } : null,
     hasGame: !!g,
     state: g && g.state,
     fps: g && g.stats && g.stats.fps,
@@ -173,15 +190,18 @@ const probe = await page.evaluate(() => {
 })
 
 if (SHOTS && SHOTS !== true) {
-  try { await page.screenshot({ path: path.join(SHOTS, 'final.png') }) } catch {}
+  try { await page.screenshot({ path: path.join(SHOTS, 'final.png'), timeout: 120000 }) }
+  catch (e) { warnings.push('final screenshot failed: ' + e.message.split('\n')[0]) }
 }
 
 await browser.close()
 server.close()
 
 const dedupe = a => [...new Set(a)]
+const rendered = probe.pixels && !probe.pixels.error && probe.pixels.distinct > 1
 const report = {
-  ok: errors.length === 0 && failedRequests.length === 0,
+  ok: errors.length === 0 && failedRequests.length === 0 && rendered,
+  rendered,
   durationS: ((Date.now() - t0) / 1000).toFixed(1),
   errors: dedupe(errors).slice(0, 60),
   failedRequests: dedupe(failedRequests).slice(0, 40),

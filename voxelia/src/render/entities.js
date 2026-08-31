@@ -1487,8 +1487,8 @@ void main() {
     rough = 0.70;
     ao = mix(1.0, 0.65, groove);
   } else if (u_skin == 5) {                            // creeper
-    float patch = smoothstep(0.44, 0.56, n1);
-    col = mix(vec3(0.20, 0.46, 0.17), vec3(0.36, 0.72, 0.30), patch);
+    float blotch = smoothstep(0.44, 0.56, n1);
+    col = mix(vec3(0.20, 0.46, 0.17), vec3(0.36, 0.72, 0.30), blotch);
     col *= 0.92 + 0.16 * n2;
     if (hp.x >= 0.0 && hp.x <= 1.0 && hp.y >= 0.0 && hp.y <= 1.0) {
       float eyes = max(inBox(hp, vec2(0.30, 0.34), vec2(0.115, 0.115)),
@@ -1538,8 +1538,8 @@ void main() {
     if (feat == 1 || feat == 2) col = vec3(0.05, 0.04, 0.04);
     rough = 0.78;
   } else if (u_skin == 11) {                           // cow
-    float patch = smoothstep(0.50, 0.58, fbm3(vec3(px * 0.13 + 3.0, u_seed), 4) * 0.5 + 0.5);
-    col = mix(vec3(0.92, 0.90, 0.88), vec3(0.13, 0.11, 0.10), patch);
+    float blotch = smoothstep(0.50, 0.58, fbm3(vec3(px * 0.13 + 3.0, u_seed), 4) * 0.5 + 0.5);
+    col = mix(vec3(0.92, 0.90, 0.88), vec3(0.13, 0.11, 0.10), blotch);
     col *= 0.94 + 0.10 * n2;
     if (zone == 4) col = mix(vec3(0.86, 0.62, 0.60), vec3(0.88, 0.86, 0.80), 0.35);
     if (feat == 1 || feat == 2) col = vec3(0.04, 0.03, 0.03);
