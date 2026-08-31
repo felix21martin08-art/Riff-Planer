@@ -15,6 +15,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const problems = []
 const notes = []
+/** Accepts plain arrays and typed arrays alike. */
+const isVec = (v, n = 3) => !!v && typeof v.length === 'number' && v.length >= n && typeof v[0] === 'number'
 const ok = m => notes.push(m)
 
 async function load(rel) {
@@ -40,8 +42,8 @@ if (materials) {
     if (seen.has(m.name)) problems.push(`materials: duplicate name '${m.name}'`)
     seen.add(m.name)
     if (!pat.has(m.pattern)) problems.push(`materials '${m.name}': unknown pattern '${m.pattern}'`)
-    if (!Array.isArray(m.color) || m.color.length < 3) problems.push(`materials '${m.name}': bad color`)
-    else if (m.color.some(c => typeof c !== 'number' || c < 0 || c > 1.001)) problems.push(`materials '${m.name}': color not in 0..1 linear`)
+    if (!isVec(m.color)) problems.push(`materials '${m.name}': bad color`)
+    else if ([...m.color].some(c => typeof c !== 'number' || c < 0 || c > 1.001)) problems.push(`materials '${m.name}': color not in 0..1 linear`)
     if (typeof m.roughness !== 'number') problems.push(`materials '${m.name}': missing roughness`)
     if (MATERIAL_INDEX && MATERIAL_INDEX.get(m.name) !== i) problems.push(`materials '${m.name}': MATERIAL_INDEX mismatch (${MATERIAL_INDEX?.get(m.name)} != ${i})`)
   }
@@ -67,8 +69,8 @@ if (blocks) {
       }
     }
     if (typeof b.hardness !== 'number') problems.push(`blocks '${b.name}': missing hardness`)
-    if (!Array.isArray(b.emission) || b.emission.length !== 3) problems.push(`blocks '${b.name}': emission must be [r,g,b]`)
-    else if (b.emission.some(v => v < 0 || v > 15)) problems.push(`blocks '${b.name}': emission out of 0..15`)
+    if (!isVec(b.emission)) problems.push(`blocks '${b.name}': emission must be [r,g,b]`)
+    else if ([...b.emission].some(v => v < 0 || v > 15)) problems.push(`blocks '${b.name}': emission out of 0..15`)
   }
   if (getBlock) {
     const air = getBlock(0)
@@ -88,7 +90,7 @@ if (biomes) {
       if (typeof v === 'string' && bn && !bn.has(v)) problems.push(`biomes '${b.name}'.${k}: unknown block '${v}'`)
     }
     for (const k of ['grassColor', 'foliageColor', 'waterColor', 'fogColor']) {
-      if (!Array.isArray(b[k]) || b[k].length < 3) problems.push(`biomes '${b.name}'.${k}: expected [r,g,b]`)
+      if (!isVec(b[k])) problems.push(`biomes '${b.name}'.${k}: expected [r,g,b]`)
     }
   }
   if (selectBiome) {
