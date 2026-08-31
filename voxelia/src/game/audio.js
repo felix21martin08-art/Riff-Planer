@@ -374,6 +374,8 @@ export class AudioEngine {
     /** @type {?GainNode} @private */ this._ambienceBus = null;
     /** @type {?GainNode} @private */ this._reverbSend = null;
     /** @type {?GainNode} @private */ this._reverbReturn = null;
+    /** @type {AudioNode[]} fixed sends that dispose() must also release. @private */
+    this._fixedSends = [];
     /** @type {ConvolverNode[]} @private */ this._convolvers = [];
     /** @type {GainNode[]} @private */ this._convGains = [];
     /** @type {number} index of the convolver currently carrying the tail. @private */
@@ -434,6 +436,8 @@ export class AudioEngine {
 
     /** @type {*} interval handle of the 100 ms pump. @private */
     this._pumpTimer = null;
+    /** @type {number} seconds accumulated by {@link AudioEngine#update}. @private */
+    this._sincePump = 0;
     /** @type {?Function} settings change handler. @private */
     this._onSettingsChange = null;
     /** @type {?Function} user-gesture unlock handler. @private */
@@ -555,6 +559,7 @@ export class AudioEngine {
       musicSend.gain.value = 0.4;
       music.connect(musicSend);
       musicSend.connect(send);
+      this._fixedSends.push(ambSend, musicSend);
 
       if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (_err) { /* handled by the unlock hook */ }
@@ -738,6 +743,31 @@ export class AudioEngine {
     } catch (err) {
       warnOnce('dispose', 'tearing down the audio graph failed', err);
     }
+    /* the fixed mixing graph itself */
+    const fixed = [this._sfxBus, this._ambienceBus, this._musicDuck, this._musicBus,
+      this._muffle, this._reverbSend, this._reverbReturn, this._master, this._compressor];
+    for (const node of this._convolvers) fixed.push(node);
+    for (const node of this._convGains) fixed.push(node);
+    for (const node of this._fixedSends) fixed.push(node);
+    for (const node of fixed) {
+      if (!node) continue;
+      try { node.disconnect(); } catch (_err) { /* already gone */ }
+    }
+    this._convolvers.length = 0;
+    this._convGains.length = 0;
+    this._fixedSends.length = 0;
+    this._master = null;
+    this._compressor = null;
+    this._sfxBus = null;
+    this._muffle = null;
+    this._musicBus = null;
+    this._musicDuck = null;
+    this._ambienceBus = null;
+    this._reverbSend = null;
+    this._reverbReturn = null;
+    this._white = null;
+    this._brown = null;
+    this._pluck = null;
     this._voices.length = 0;
     this._dying.length = 0;
     this._pool.length = 0;
@@ -1253,7 +1283,7 @@ export class AudioEngine {
     for (let i = 0; i < this._voices.length; i++) {
       const v = this._voices[i];
       const age = now - v.startTime;
-      const score = v.audible * (0.6 + v.priority * 0.4) - age * 0.25 - (v.loop ? -0.5 : 0);
+      const score = v.audible * (0.6 + v.priority * 0.4) - age * 0.25 + (v.loop ? 0.5 : 0);
       if (score < worstScore) {
         worstScore = score;
         worst = v;
@@ -1513,11 +1543,11 @@ export class AudioEngine {
       };
       let dur = 0.4;
       try {
-        dur = num(recipe(this, v, o), 0.4);
+        const produced = recipe(this, v, o);
+        if (typeof produced === 'number' && !Number.isNaN(produced)) dur = produced;
       } catch (err) {
         warnOnce(`recipe:${key}`, `the sound "${key}" could not be synthesised`, err);
-        this._disconnectHolder(v);
-        this._pool.push(v);
+        this._releaseVoice(v);
         return 0;
       }
       return this._endVoice(v, dur + Math.max(0, num(opts.delay, 0)));
@@ -1666,7 +1696,8 @@ export class AudioEngine {
     const exposed = biome ? (biome.category === 'ocean' || biome.humidity < 0.35 ? 1.25 : 1) : 1;
     const temperate = biome ? (biome.temperature > 0.2 && biome.temperature < 1.4) : true;
 
-    t.wind = wet ? 0 : (under ? 0.06 : clamp(0.22 * exposed + (raining ? 0.18 : 0), 0, 0.55));
+    const storm = weather === 'thunder' ? 1 : (raining ? 0.65 : (snowing ? 0.4 : 0));
+    t.wind = wet ? 0 : (under ? 0.06 : clamp(lerp(0.2, 0.5, storm) * exposed, 0, 0.6));
     t.rain = wet ? 0.1 : (under ? 0.05 : (raining ? (weather === 'thunder' ? 0.85 : 0.7) : (snowing ? 0.12 : 0)));
     t.cave = under && !wet ? 0.65 : 0;
     t.water = wet ? 0.9 : 0;
@@ -1809,7 +1840,14 @@ export class AudioEngine {
       this._mood = name;
       return;
     }
-    this._setMood(name);
+    let hasLive = false;
+    for (const layer of this._layers) if (!layer.dying && !layer.disc) hasLive = true;
+    if (!hasLive) {
+      this._mood = name;
+      this._musicIdleUntil = Math.min(this._musicIdleUntil, this.ctx.currentTime + 3);
+    } else {
+      this._setMood(name);
+    }
   }
 
   /**
@@ -1885,9 +1923,15 @@ export class AudioEngine {
   /**
    * Play one of the thirteen generative music-disc pieces in a jukebox.
    * The piece is deterministic: the same disc always renders the same music.
+   *
+   * A disc obeys the music volume but bypasses the combat duck — a record the
+   * player deliberately put on should not dip when a zombie turns up. Passing
+   * the jukebox position makes the record audible only around the block, with
+   * the same panning and distance rolloff as any other world sound.
+   *
    * @param {string} track track name from `game/items.js#musicDiscTrack`
-   * @param {{x?:number, y?:number, z?:number}} [opts] jukebox position (unused
-   *   for the mix, kept for symmetry with {@link AudioEngine#play})
+   * @param {{x?:number, y?:number, z?:number}} [opts] jukebox block position;
+   *   omit it to play the disc as flat, non-positional music
    * @returns {boolean} `true` when the disc started
    */
   playDisc(track, opts = {}) {
@@ -1901,6 +1945,16 @@ export class AudioEngine {
       layer.disc = true;
       layer.profileOverride = profile;
       layer.melodyBoost = 1;
+      /* re-route: discs skip the combat duck, and follow the jukebox in space */
+      try { layer.gain.disconnect(); } catch (_err) { /* not connected yet */ }
+      if (opts && opts.x !== undefined && opts.y !== undefined && opts.z !== undefined) {
+        const lpf = this.biquad(layer, 'lowpass', 7000, 0.7);
+        const panner = this._makePanner(num(opts.x, 0), num(opts.y, 0), num(opts.z, 0));
+        layer.nodes.push(panner);
+        this.chain(layer.gain, lpf, panner, this._musicBus);
+      } else {
+        layer.gain.connect(this._musicBus);
+      }
       const now = this.ctx.currentTime;
       layer.nextBar = now + 0.25;
       layer.pieceEnd = now + profile.length;
@@ -1908,7 +1962,6 @@ export class AudioEngine {
       this._ramp(layer.gain.gain, 1.25, now, 1.5);
       this._layers.push(layer);
       this._discUntil = layer.pieceEnd;
-      void opts;
       return true;
     } catch (err) {
       warnOnce('disc', 'the music disc could not be started', err);
@@ -2188,14 +2241,1223 @@ export class AudioEngine {
   }
 
   /**
-   * Optional per-frame hook. The engine keeps itself alive with its own timer,
-   * so this only exists so the Game can hand over the frame delta without
-   * having to special-case audio. It never allocates.
+   * Per-frame fallback for the housekeeping pass. The engine normally drives
+   * itself from a 100 ms timer; where `setInterval` is unavailable this method
+   * takes over, running the same pass at most ten times a second. Calling it is
+   * always safe and never allocates.
    * @param {number} dt seconds since the previous call
    * @returns {void}
    */
   update(dt) {
     if (!this.ready) return;
-    void dt;
+    if (this._pumpTimer !== null) return;
+    this._sincePump += Math.max(0, num(dt, 0));
+    if (this._sincePump < 0.1) return;
+    this._sincePump = 0;
+    this._pump();
   }
 }
+
+/* ========================================================================== */
+/* Shared synthesis primitives                                                */
+/* ========================================================================== */
+
+/**
+ * A filtered noise burst with an attack/decay envelope. Returns the filter so
+ * the caller can sweep it.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} level peak gain
+ * @param {number} dur decay length in seconds
+ * @param {BiquadFilterType} type filter type
+ * @param {number} freq filter frequency
+ * @param {number} q filter quality
+ * @param {number} [rate=1] noise playback rate
+ * @param {number} [attack=0.003] attack length
+ * @param {boolean} [brown=false] use brown noise
+ * @returns {BiquadFilterNode} the filter, for further modulation
+ */
+function noiseBurst(eng, h, out, t, level, dur, type, freq, q, rate = 1, attack = 0.003, brown = false) {
+  const src = eng.noiseNode(h, t, dur + attack + 0.06, rate, brown);
+  const f = eng.biquad(h, type, freq, q);
+  const g = eng.gainNode(h, 0);
+  eng.chain(src, f, g, out);
+  eng.envAD(g.gain, t, level, attack, dur);
+  return f;
+}
+
+/**
+ * A pitched thump: one oscillator sweeping downwards under a fast envelope.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} level peak gain
+ * @param {number} f0 start frequency
+ * @param {number} f1 end frequency
+ * @param {number} dur decay length
+ * @param {OscillatorType} [wave='sine'] waveform
+ * @returns {void}
+ */
+function thump(eng, h, out, t, level, f0, f1, dur, wave = 'sine') {
+  const osc = eng.oscNode(h, wave, f0, t, dur + 0.05);
+  const g = eng.gainNode(h, 0);
+  eng.chain(osc, g, out);
+  eng.sweep(osc.frequency, t, f0, f1, dur);
+  eng.envAD(g.gain, t, level, 0.004, dur);
+}
+
+/**
+ * A two-operator FM bell. The modulator index decays faster than the carrier,
+ * which is exactly what makes a bell sound like a bell.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} freq carrier frequency
+ * @param {number} dur decay length
+ * @param {number} level peak gain
+ * @param {number} [ratio=3.51] modulator/carrier frequency ratio
+ * @param {number} [index=620] peak modulation depth in Hz
+ * @returns {void}
+ */
+function fmBell(eng, h, out, t, freq, dur, level, ratio = 3.51, index = 620) {
+  const car = eng.oscNode(h, 'sine', freq, t, dur + 0.08);
+  const mod = eng.oscNode(h, 'sine', freq * ratio, t, dur + 0.08);
+  const depth = eng.gainNode(h, 0);
+  const g = eng.gainNode(h, 0);
+  mod.connect(depth);
+  try { depth.connect(car.frequency); } catch (_err) { /* ignore */ }
+  eng.chain(car, g, out);
+  eng.envAD(depth.gain, t, index, 0.002, dur * 0.35);
+  eng.envAD(g.gain, t, level, 0.004, dur);
+}
+
+/**
+ * A burst of tiny impulses — the basis of rattles, crackles and gravel.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} count how many impulses
+ * @param {number} spread average spacing in seconds
+ * @param {number} freq band centre
+ * @param {number} q band quality
+ * @param {number} level peak gain of the loudest impulse
+ * @param {number} [dur=0.03] length of a single impulse
+ * @returns {number} total length in seconds
+ */
+function impulseTrain(eng, h, out, t, count, spread, freq, q, level, dur = 0.03) {
+  let cursor = t;
+  for (let i = 0; i < count; i++) {
+    const f = freq * (0.7 + eng.rand() * 0.75);
+    noiseBurst(eng, h, out, cursor, level * (0.45 + eng.rand() * 0.6), dur, 'bandpass', f, q, 1, 0.0015);
+    cursor += spread * (0.45 + eng.rand() * 1.2);
+  }
+  return cursor - t + dur;
+}
+
+/**
+ * A resonant sweep — used for creaking doors, hisses and whooshes.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} level peak gain
+ * @param {number} dur length in seconds
+ * @param {number} f0 start centre frequency
+ * @param {number} f1 end centre frequency
+ * @param {number} q resonance
+ * @param {number} [attack=0.02] attack length
+ * @returns {void}
+ */
+function sweepNoise(eng, h, out, t, level, dur, f0, f1, q, attack = 0.02) {
+  const f = noiseBurst(eng, h, out, t, level, dur, 'bandpass', f0, q, 1, attack);
+  eng.sweep(f.frequency, t, f0, f1, dur);
+}
+
+/**
+ * Inharmonic sine partials, the fingerprint of glass and struck metal.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {number} base fundamental in Hz
+ * @param {readonly number[]} ratios partial frequency ratios
+ * @param {number} decay decay of the first partial in seconds
+ * @param {number} level peak gain of the first partial
+ * @returns {void}
+ */
+function partials(eng, h, out, t, base, ratios, decay, level) {
+  for (let i = 0; i < ratios.length; i++) {
+    const f = clampFreq(base * ratios[i]);
+    const d = decay * Math.pow(0.72, i);
+    const osc = eng.oscNode(h, 'sine', f, t, d + 0.05);
+    const g = eng.gainNode(h, 0);
+    eng.chain(osc, g, out);
+    eng.envAD(g.gain, t, level * Math.pow(0.62, i), 0.002, d);
+  }
+}
+
+/* ========================================================================== */
+/* Block material synthesis                                                   */
+/* ========================================================================== */
+
+/**
+ * Synthesise a dig / step / place / break / hit sound for one material class.
+ * Everything is derived from the {@link GROUPS} descriptor, so the same
+ * generator serves all eleven material families.
+ * @param {AudioEngine} eng the engine
+ * @param {Voice} v the voice being filled
+ * @param {Object} o playback options (`t`, `gain`, `pitch`)
+ * @param {Object} g a {@link GROUPS} descriptor
+ * @param {string} action a key of {@link ACTIONS}
+ * @returns {number} the length of the sound in seconds
+ */
+function digSynth(eng, v, o, g, action) {
+  const m = ACTIONS[action] || ACTIONS.hit;
+  const t = o.t;
+  const out = v.out;
+  const pitch = o.pitch * m.pitch;
+  const dur = g.dur * m.dur;
+  const level = o.gain * g.gain * m.gain;
+
+  const grains = Math.max(1, g.grains | 0);
+  for (let i = 0; i < grains; i++) {
+    const gt = t + (i === 0 ? 0 : g.grainSpread * i * (0.6 + eng.rand() * 0.9));
+    const gd = dur * (grains > 1 ? 0.45 + eng.rand() * 0.55 : 1);
+    const gl = level * (i === 0 ? 1 : 0.4 + eng.rand() * 0.45);
+    const rate = pitch * (0.9 + eng.rand() * 0.25);
+    const src = eng.noiseNode(v, gt, gd + 0.06, rate);
+    const hp = eng.biquad(v, 'highpass', clampFreq(g.hp * pitch), 0.7);
+    const bp = eng.biquad(v, g.filter, clampFreq(g.freq * pitch * (0.9 + eng.rand() * 0.22)), g.q);
+    const env = eng.gainNode(v, 0);
+    eng.chain(src, hp, bp, env, out);
+    eng.envAD(env.gain, gt, gl, 0.0025, gd);
+    if (g.sweep > 0) {
+      eng.sweep(bp.frequency, gt, g.freq * pitch * 1.7, g.freq * pitch * 0.5, gd);
+    }
+  }
+
+  if (g.body > 0) {
+    const bf = g.bodyFreq * pitch;
+    thump(eng, v, out, t, level * g.body * m.body, bf, bf * 0.55, g.bodyDecay);
+  }
+  if (g.partials) {
+    partials(eng, v, out, t, g.partialBase * pitch, g.partials, g.partialDecay,
+      level * (action === 'break' ? 0.45 : 0.28));
+  }
+  if (g.ring > 0) {
+    const f = noiseBurst(eng, v, out, t, level * 0.42, g.ring, 'bandpass',
+      clampFreq(g.freq * pitch * 1.2), 20, 1, 0.002);
+    eng.sweep(f.frequency, t, g.freq * pitch * 1.25, g.freq * pitch * 1.1, g.ring);
+  }
+  if (action === 'break') {
+    thump(eng, v, out, t + 0.012, level * 0.85, 152 * pitch, 52 * pitch, 0.27);
+    impulseTrain(eng, v, out, t + 0.04, 3, 0.035, g.freq * pitch * 0.8, 4, level * 0.3, 0.035);
+  }
+
+  const tail = Math.max(dur, g.bodyDecay, g.ring, g.partialDecay);
+  return tail + m.tail + 0.12;
+}
+
+/* ========================================================================== */
+/* Sound effect recipes                                                       */
+/* ========================================================================== */
+
+/**
+ * Alternative spellings that map onto a real recipe.
+ * @type {Readonly<Object<string, string>>}
+ */
+const ALIASES = Object.freeze({
+  fence_gate: 'door',
+  craft: 'crafting',
+  crafting_table: 'crafting',
+  blast_furnace: 'furnace',
+  barrel: 'chest',
+  lightning: 'thunder',
+  xp_orb: 'xp_pickup',
+  pickup: 'item_pickup',
+  hit: 'attack_hit',
+  ui_click: 'click',
+  button: 'click',
+  lever: 'click',
+  level_up: 'levelup',
+  break: 'item_break',
+  bow: 'bow_shoot',
+  shoot: 'bow_shoot',
+  arrow: 'bow_shoot',
+  tnt: 'fuse',
+  beacon_hum: 'beacon',
+});
+
+/**
+ * Every named sound in the game. A recipe fills a voice with nodes and returns
+ * how long the sound lasts, tail included.
+ * @type {Readonly<Object<string, (eng:AudioEngine, v:Object, o:Object) => number>>}
+ */
+const RECIPES = Object.freeze({
+  /* ---------------------------------------------------------- interface -- */
+  click(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.34, 0.028, 'bandpass', 2400 * o.pitch, 3, 1, 0.001);
+    thump(eng, v, v.out, t, o.gain * 0.22, 880 * o.pitch, 520 * o.pitch, 0.035, 'triangle');
+    return 0.14;
+  },
+  ui_hover(eng, v, o) {
+    noiseBurst(eng, v, v.out, o.t, o.gain * 0.14, 0.022, 'bandpass', 3600 * o.pitch, 4, 1, 0.001);
+    return 0.1;
+  },
+  ui_select(eng, v, o) {
+    const t = o.t;
+    fmBell(eng, v, v.out, t, 880 * o.pitch, 0.16, o.gain * 0.22, 2.01, 260);
+    fmBell(eng, v, v.out, t + 0.06, 1320 * o.pitch, 0.18, o.gain * 0.17, 2.01, 220);
+    return 0.34;
+  },
+  ui_back(eng, v, o) {
+    const t = o.t;
+    fmBell(eng, v, v.out, t, 660 * o.pitch, 0.16, o.gain * 0.2, 2.01, 220);
+    fmBell(eng, v, v.out, t + 0.06, 440 * o.pitch, 0.2, o.gain * 0.16, 2.01, 200);
+    return 0.36;
+  },
+  ui_error(eng, v, o) {
+    const t = o.t;
+    const osc = eng.oscNode(v, 'square', 220 * o.pitch, t, 0.24);
+    const lp = eng.biquad(v, 'lowpass', 1400, 2);
+    const g = eng.gainNode(v, 0);
+    eng.chain(osc, lp, g, v.out);
+    eng.sweep(osc.frequency, t, 230 * o.pitch, 150 * o.pitch, 0.2);
+    eng.envAD(g.gain, t, o.gain * 0.24, 0.006, 0.2);
+    return 0.34;
+  },
+  ui_open(eng, v, o) {
+    sweepNoise(eng, v, v.out, o.t, o.gain * 0.25, 0.22, 500 * o.pitch, 1800 * o.pitch, 2.5, 0.01);
+    return 0.34;
+  },
+  ui_close(eng, v, o) {
+    sweepNoise(eng, v, v.out, o.t, o.gain * 0.25, 0.22, 1800 * o.pitch, 480 * o.pitch, 2.5, 0.01);
+    return 0.34;
+  },
+  ui_toggle(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.3, 0.03, 'bandpass', 1800 * o.pitch, 5, 1, 0.001);
+    noiseBurst(eng, v, v.out, t + 0.05, o.gain * 0.22, 0.03, 'bandpass', 2600 * o.pitch, 5, 1, 0.001);
+    return 0.18;
+  },
+
+  /* -------------------------------------------------------------- blocks -- */
+  door(eng, v, o) {
+    const t = o.t;
+    const up = o.pitch >= 1;
+    /* the creak: a very resonant band sweeping while a rough noise floor
+       scrapes underneath it */
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.3, 0.55, 'bandpass',
+      up ? 420 : 780, 14, 0.6, 0.05);
+    eng.sweep(f.frequency, t, up ? 420 : 820, up ? 900 : 380, 0.5);
+    const f2 = noiseBurst(eng, v, v.out, t + 0.02, o.gain * 0.16, 0.5, 'bandpass',
+      up ? 1250 : 2100, 9, 0.6, 0.06);
+    eng.sweep(f2.frequency, t + 0.02, up ? 1250 : 2200, up ? 2300 : 1050, 0.46);
+    /* the latch */
+    noiseBurst(eng, v, v.out, t + 0.5, o.gain * 0.3, 0.05, 'bandpass', 1500, 6, 1, 0.001);
+    thump(eng, v, v.out, t + 0.5, o.gain * 0.3, 190, 90, 0.11);
+    return 0.85;
+  },
+  trapdoor(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.26, 0.3, 'bandpass', 700, 11, 0.8, 0.03);
+    eng.sweep(f.frequency, t, 700, o.pitch >= 1 ? 1200 : 460, 0.28);
+    thump(eng, v, v.out, t + 0.26, o.gain * 0.32, 230, 110, 0.12, 'triangle');
+    return 0.55;
+  },
+  chest(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.24, 0.34, 'bandpass', 560, 12, 0.7, 0.04);
+    eng.sweep(f.frequency, t, 520, 980, 0.32);
+    partials(eng, v, v.out, t, 300, [1, 2.4, 3.9], 0.16, o.gain * 0.16);
+    thump(eng, v, v.out, t + 0.3, o.gain * 0.4, 170, 78, 0.16);
+    return 0.6;
+  },
+  crafting(eng, v, o) {
+    const t = o.t;
+    for (let i = 0; i < 3; i++) {
+      const it = t + i * (0.035 + eng.rand() * 0.03);
+      noiseBurst(eng, v, v.out, it, o.gain * (0.3 - i * 0.06), 0.09, 'bandpass',
+        (420 + eng.rand() * 340) * o.pitch, 6, 1, 0.002);
+      thump(eng, v, v.out, it, o.gain * 0.22, 210 * o.pitch, 120 * o.pitch, 0.1);
+    }
+    return 0.4;
+  },
+  furnace(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.32, 0.55, 'lowpass', 700, 1.2, 0.7, 0.06, true);
+    eng.sweep(f.frequency, t, 380, 1300, 0.5);
+    impulseTrain(eng, v, v.out, t + 0.08, 6, 0.06, 2400, 5, o.gain * 0.14, 0.02);
+    return 0.8;
+  },
+  enchanting(eng, v, o) {
+    const t = o.t;
+    const notes = [880, 1174, 1318, 1760];
+    for (let i = 0; i < notes.length; i++) {
+      fmBell(eng, v, v.out, t + i * 0.07, notes[i] * o.pitch, 0.7 - i * 0.08,
+        o.gain * (0.2 - i * 0.03), 3.51, 900);
+    }
+    sweepNoise(eng, v, v.out, t, o.gain * 0.1, 0.6, 2400, 6000, 2, 0.15);
+    return 1.1;
+  },
+  anvil(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.55, 0.06, 'bandpass', 2600 * o.pitch, 3, 1, 0.001);
+    partials(eng, v, v.out, t, 520 * o.pitch, [1, 2.31, 3.83, 5.9], 0.85, o.gain * 0.4);
+    thump(eng, v, v.out, t, o.gain * 0.6, 160 * o.pitch, 62 * o.pitch, 0.24);
+    return 1.3;
+  },
+  brewing(eng, v, o) {
+    const t = o.t;
+    for (let i = 0; i < 7; i++) {
+      const bt = t + i * (0.05 + eng.rand() * 0.09);
+      const osc = eng.oscNode(v, 'sine', 300, bt, 0.1);
+      const g = eng.gainNode(v, 0);
+      eng.chain(osc, g, v.out);
+      eng.sweep(osc.frequency, bt, 260 + eng.rand() * 200, 700 + eng.rand() * 500, 0.07);
+      eng.envAD(g.gain, bt, o.gain * 0.13, 0.004, 0.07);
+    }
+    return 0.9;
+  },
+  beacon(eng, v, o) {
+    const t = o.t;
+    const a = eng.oscNode(v, 'sine', 110 * o.pitch, t, 1.9);
+    const b = eng.oscNode(v, 'sine', 165 * o.pitch, t, 1.9, 7);
+    const c = eng.oscNode(v, 'sine', 220 * o.pitch, t, 1.9, -7);
+    const lp = eng.biquad(v, 'lowpass', 900, 2);
+    const g = eng.gainNode(v, 0);
+    eng.chain(a, lp, g, v.out);
+    b.connect(lp);
+    c.connect(lp);
+    eng.sweep(lp.frequency, t, 400, 1800, 1.2);
+    eng.envAHD(g.gain, t, o.gain * 0.3, 0.5, 0.4, 0.9);
+    return 2.1;
+  },
+  jukebox(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.3, 0.04, 'bandpass', 1900, 6, 1, 0.001);
+    noiseBurst(eng, v, v.out, t + 0.08, o.gain * 0.08, 0.5, 'highpass', 4200, 0.8, 1, 0.02);
+    return 0.7;
+  },
+  note_block(eng, v, o) {
+    const t = o.t;
+    const scale = [0, 2, 4, 7, 9, 12];
+    const step = scale[(eng.rand() * scale.length) | 0];
+    const freq = midiToFreq(60 + step) * o.pitch;
+    const src = eng.pluckNode(v, t, freq, 1.1);
+    const lp = eng.biquad(v, 'lowpass', clampFreq(freq * 6 + 800), 1);
+    const g = eng.gainNode(v, 0);
+    eng.chain(src, lp, g, v.out);
+    eng.envAD(g.gain, t, o.gain * 0.45, 0.004, 0.9);
+    return 1.2;
+  },
+  bed(eng, v, o) {
+    noiseBurst(eng, v, v.out, o.t, o.gain * 0.26, 0.4, 'lowpass', 480 * o.pitch, 0.9, 0.8, 0.05);
+    return 0.55;
+  },
+  cauldron(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.3, 0.4, 'bandpass', 700, 1.6, 1, 0.02);
+    eng.sweep(f.frequency, t, 900, 420, 0.36);
+    thump(eng, v, v.out, t + 0.02, o.gain * 0.2, 220, 120, 0.15);
+    return 0.6;
+  },
+  hopper(eng, v, o) {
+    impulseTrain(eng, v, v.out, o.t, 4, 0.04, 2100 * o.pitch, 12, o.gain * 0.3, 0.04);
+    return 0.4;
+  },
+  dispenser(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.36, 0.05, 'bandpass', 1300 * o.pitch, 7, 1, 0.001);
+    thump(eng, v, v.out, t + 0.03, o.gain * 0.3, 240, 110, 0.14);
+    return 0.35;
+  },
+
+  /* -------------------------------------------------------------- tools --- */
+  bucket_fill(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.4, 0.55, 'bandpass', 400, 2.2, 1, 0.03);
+    eng.sweep(f.frequency, t, 380, 1500, 0.5);
+    for (let i = 0; i < 6; i++) {
+      const bt = t + 0.05 + i * 0.07;
+      const osc = eng.oscNode(v, 'sine', 320, bt, 0.09);
+      const g = eng.gainNode(v, 0);
+      eng.chain(osc, g, v.out);
+      eng.sweep(osc.frequency, bt, 300 + i * 60, 800 + i * 120, 0.06);
+      eng.envAD(g.gain, bt, o.gain * 0.12, 0.004, 0.06);
+    }
+    return 0.8;
+  },
+  bucket_empty(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.5, 0.5, 'bandpass', 1400, 1.6, 1, 0.005);
+    eng.sweep(f.frequency, t, 1600, 420, 0.45);
+    thump(eng, v, v.out, t, o.gain * 0.3, 260, 90, 0.2);
+    return 0.75;
+  },
+  ignite(eng, v, o) {
+    const t = o.t;
+    impulseTrain(eng, v, v.out, t, 3, 0.022, 5200, 6, o.gain * 0.4, 0.018);
+    const f = noiseBurst(eng, v, v.out, t + 0.05, o.gain * 0.3, 0.45, 'lowpass', 800, 1, 0.8, 0.05, true);
+    eng.sweep(f.frequency, t + 0.05, 500, 1600, 0.4);
+    return 0.7;
+  },
+  hoe(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.42, 0.3, 'lowpass', 900, 1.1, 0.85, 0.006);
+    eng.sweep(f.frequency, t, 1400, 500, 0.28);
+    thump(eng, v, v.out, t, o.gain * 0.3, 120, 60, 0.16);
+    return 0.5;
+  },
+  shear(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.34, 0.05, 'bandpass', 4200 * o.pitch, 8, 1, 0.001);
+    noiseBurst(eng, v, v.out, t + 0.07, o.gain * 0.3, 0.06, 'bandpass', 3400 * o.pitch, 8, 1, 0.001);
+    partials(eng, v, v.out, t + 0.07, 2600 * o.pitch, [1, 2.4], 0.12, o.gain * 0.1);
+    return 0.3;
+  },
+
+  /* -------------------------------------------------------------- player -- */
+  eat(eng, v, o) {
+    const t = o.t;
+    let cursor = t;
+    for (let i = 0; i < 4; i++) {
+      const f = noiseBurst(eng, v, v.out, cursor, o.gain * (0.3 - i * 0.03), 0.08,
+        'lowpass', 700 * o.pitch, 1.4, 0.7, 0.006);
+      eng.sweep(f.frequency, cursor, 900 * o.pitch, 380 * o.pitch, 0.07);
+      thump(eng, v, v.out, cursor, o.gain * 0.14, 150, 90, 0.06);
+      cursor += 0.1 + eng.rand() * 0.05;
+    }
+    return cursor - t + 0.2;
+  },
+  drink(eng, v, o) {
+    const t = o.t;
+    let cursor = t;
+    for (let i = 0; i < 3; i++) {
+      const osc = eng.oscNode(v, 'sine', 240, cursor, 0.12);
+      const lp = eng.biquad(v, 'lowpass', 620, 1.5);
+      const g = eng.gainNode(v, 0);
+      eng.chain(osc, lp, g, v.out);
+      eng.sweep3(osc.frequency, cursor, 200 * o.pitch, 330 * o.pitch, 180 * o.pitch, 0.11);
+      eng.envAD(g.gain, cursor, o.gain * 0.3, 0.01, 0.1);
+      noiseBurst(eng, v, v.out, cursor, o.gain * 0.1, 0.08, 'lowpass', 900, 1, 0.8, 0.01);
+      cursor += 0.16 + eng.rand() * 0.06;
+    }
+    return cursor - t + 0.2;
+  },
+  item_pickup(eng, v, o) {
+    const t = o.t;
+    const osc = eng.oscNode(v, 'triangle', 620 * o.pitch, t, 0.14);
+    const g = eng.gainNode(v, 0);
+    eng.chain(osc, g, v.out);
+    eng.sweep(osc.frequency, t, 560 * o.pitch, 1020 * o.pitch, 0.1);
+    eng.envAD(g.gain, t, o.gain * 0.28, 0.005, 0.11);
+    return 0.24;
+  },
+  xp_pickup(eng, v, o) {
+    const t = o.t;
+    fmBell(eng, v, v.out, t, 1480 * o.pitch, 0.42, o.gain * 0.26, 3.51, 1100);
+    fmBell(eng, v, v.out, t + 0.03, 2220 * o.pitch, 0.3, o.gain * 0.12, 2.01, 500);
+    return 0.6;
+  },
+  levelup(eng, v, o) {
+    const t = o.t;
+    const arp = [0, 4, 7, 12, 16];
+    for (let i = 0; i < arp.length; i++) {
+      fmBell(eng, v, v.out, t + i * 0.085, midiToFreq(72 + arp[i]) * o.pitch,
+        0.9 - i * 0.09, o.gain * (0.24 - i * 0.02), 2.01, 640);
+    }
+    sweepNoise(eng, v, v.out, t, o.gain * 0.08, 0.7, 1800, 6200, 1.6, 0.2);
+    return 1.5;
+  },
+  item_break(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.4, 0.12, 'bandpass', 1900 * o.pitch, 4, 1, 0.001);
+    partials(eng, v, v.out, t, 720 * o.pitch, [1, 2.7, 4.3], 0.22, o.gain * 0.2);
+    thump(eng, v, v.out, t, o.gain * 0.3, 200, 80, 0.18);
+    return 0.5;
+  },
+  toss(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.22, 0.24, 'bandpass', 900, 1.4, 1, 0.03);
+    eng.sweep(f.frequency, t, 1400 * o.pitch, 500 * o.pitch, 0.22);
+    return 0.4;
+  },
+  hurt(eng, v, o) {
+    return formantVoice(eng, v, v.out, o.t, {
+      f0: 190 * o.pitch, mid: 210 * o.pitch, end: 140 * o.pitch, dur: 0.3,
+      wave: 'sawtooth', level: o.gain * 0.5, noise: 0.22, vib: 7, vibDepth: 22,
+      formants: [[620, 7, 1], [1150, 8, 0.55], [2500, 9, 0.22]],
+    });
+  },
+  death(eng, v, o) {
+    return formantVoice(eng, v, v.out, o.t, {
+      f0: 180 * o.pitch, mid: 150 * o.pitch, end: 82 * o.pitch, dur: 0.95,
+      wave: 'sawtooth', level: o.gain * 0.55, noise: 0.3, vib: 5, vibDepth: 30,
+      formants: [[560, 6, 1], [1050, 7, 0.5], [2200, 8, 0.18]],
+    });
+  },
+  burn(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.35, 0.6, 'lowpass', 900, 1, 0.8, 0.03, true);
+    eng.sweep(f.frequency, t, 1400, 500, 0.55);
+    impulseTrain(eng, v, v.out, t, 7, 0.06, 3200, 5, o.gain * 0.12, 0.02);
+    return 0.85;
+  },
+  attack_hit(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.4, 0.09, 'bandpass', 900 * o.pitch, 1.6, 1, 0.002);
+    thump(eng, v, v.out, t, o.gain * 0.5, 190 * o.pitch, 70 * o.pitch, 0.16);
+    return 0.32;
+  },
+  attack_crit(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.45, 0.1, 'bandpass', 1500 * o.pitch, 2, 1, 0.001);
+    thump(eng, v, v.out, t, o.gain * 0.55, 230 * o.pitch, 78 * o.pitch, 0.18);
+    partials(eng, v, v.out, t + 0.02, 2400 * o.pitch, [1, 2.3, 3.6], 0.2, o.gain * 0.14);
+    return 0.42;
+  },
+
+  /* ---------------------------------------------------------- projectiles - */
+  bow_draw(eng, v, o) {
+    const t = o.t;
+    const dur = o.loop ? Infinity : 1.05;
+    const src = eng.noiseNode(v, t, Number.isFinite(dur) ? dur + 0.1 : Infinity, 0.7);
+    const bp = eng.biquad(v, 'bandpass', 320, 3.5);
+    const g = eng.gainNode(v, 0);
+    eng.chain(src, bp, g, v.out);
+    eng.sweep(bp.frequency, t, 300, 2400, 1.0);
+    if (o.loop) {
+      g.gain.setValueAtTime(EPS, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(EPS, o.gain * 0.3), t + 0.9);
+    } else {
+      eng.envAHD(g.gain, t, o.gain * 0.3, 0.85, 0.05, 0.12);
+    }
+    return o.loop ? Infinity : 1.2;
+  },
+  bow_shoot(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.5, 0.05, 'bandpass', 2200 * o.pitch, 3, 1, 0.001);
+    const f = noiseBurst(eng, v, v.out, t + 0.01, o.gain * 0.3, 0.4, 'bandpass', 1400, 1.4, 1, 0.012);
+    eng.sweep(f.frequency, t + 0.01, 1600 * o.pitch, 420 * o.pitch, 0.38);
+    thump(eng, v, v.out, t, o.gain * 0.22, 320 * o.pitch, 140 * o.pitch, 0.12, 'triangle');
+    return 0.6;
+  },
+  arrow_hit(eng, v, o) {
+    const t = o.t;
+    noiseBurst(eng, v, v.out, t, o.gain * 0.35, 0.05, 'highpass', 3800 * o.pitch, 0.9, 1, 0.001);
+    thump(eng, v, v.out, t, o.gain * 0.45, 260 * o.pitch, 96 * o.pitch, 0.15);
+    partials(eng, v, v.out, t, 430 * o.pitch, [1, 2.42], 0.12, o.gain * 0.14);
+    return 0.35;
+  },
+  fuse(eng, v, o) {
+    const t = o.t;
+    const dur = o.loop ? Infinity : 1.4;
+    const src = eng.noiseNode(v, t, dur, 1.2);
+    const bp = eng.biquad(v, 'bandpass', 3200, 1.3);
+    const g = eng.gainNode(v, 0);
+    eng.chain(src, bp, g, v.out);
+    /* the sizzle: a fast LFO flickering the level */
+    const lfo = eng.oscNode(v, 'sine', 17, t, dur);
+    const lfoAmt = eng.gainNode(v, o.gain * 0.09);
+    lfo.connect(lfoAmt);
+    try { lfoAmt.connect(g.gain); } catch (_err) { /* ignore */ }
+    if (o.loop) {
+      g.gain.setValueAtTime(EPS, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(EPS, o.gain * 0.2), t + 0.15);
+    } else {
+      eng.envAHD(g.gain, t, o.gain * 0.2, 0.06, 1.1, 0.2);
+    }
+    return o.loop ? Infinity : 1.5;
+  },
+  explode(eng, v, o) {
+    const t = o.t;
+    const p = o.pitch;
+    /* the crack */
+    noiseBurst(eng, v, v.out, t, o.gain * 0.75, 0.3, 'bandpass', 420 * p, 0.9, 1, 0.002);
+    /* the body: brown noise through a closing low-pass */
+    const body = noiseBurst(eng, v, v.out, t, o.gain * 0.95, 1.7, 'lowpass', 900 * p, 1, 0.75, 0.006, true);
+    eng.sweep(body.frequency, t, 950 * p, 70 * p, 1.6);
+    /* the boom */
+    thump(eng, v, v.out, t, o.gain * 0.8, 84 * p, 26 * p, 0.85);
+    /* the rumbling tail */
+    const tail = noiseBurst(eng, v, v.out, t + 0.06, o.gain * 0.45, 2.2, 'lowpass', 200 * p, 0.9, 0.5, 0.2, true);
+    eng.sweep(tail.frequency, t + 0.06, 260 * p, 55 * p, 2.1);
+    /* debris */
+    impulseTrain(eng, v, v.out, t + 0.1, 8, 0.07, 1800, 4, o.gain * 0.16, 0.03);
+    return 3.2;
+  },
+
+  /* ---------------------------------------------------------- environment - */
+  splash(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.55, 0.45, 'bandpass', 1400, 1.1, 1, 0.004);
+    eng.sweep(f.frequency, t, 1900 * o.pitch, 380 * o.pitch, 0.42);
+    thump(eng, v, v.out, t, o.gain * 0.3, 240, 90, 0.2);
+    impulseTrain(eng, v, v.out, t + 0.05, 5, 0.05, 2600, 6, o.gain * 0.12, 0.03);
+    return 0.7;
+  },
+  swim(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.26, 0.3, 'bandpass', 700, 1.1, 0.9, 0.05);
+    eng.sweep(f.frequency, t, 500 * o.pitch, 1100 * o.pitch, 0.28);
+    return 0.45;
+  },
+  thunder(eng, v, o) {
+    const t = o.t;
+    const p = o.pitch;
+    const near = o.gain > 0.7;
+    if (near) {
+      noiseBurst(eng, v, v.out, t, o.gain * 0.6, 0.25, 'highpass', 1800 * p, 0.8, 1, 0.002);
+    }
+    const body = noiseBurst(eng, v, v.out, t + (near ? 0.02 : 0.0), o.gain * 0.8, 4.5,
+      'lowpass', 260 * p, 0.9, 0.45, near ? 0.02 : 0.5, true);
+    eng.sweep(body.frequency, t, 300 * p, 48 * p, 4.2);
+    /* slow amplitude wobble makes the rumble roll */
+    const lfo = eng.oscNode(v, 'sine', 0.7, t, 4.6);
+    const amt = eng.gainNode(v, 26 * p);
+    lfo.connect(amt);
+    try { amt.connect(body.frequency); } catch (_err) { /* ignore */ }
+    thump(eng, v, v.out, t + 0.05, o.gain * 0.5, 60 * p, 22 * p, 2.4);
+    return 5.4;
+  },
+  water_drip(eng, v, o) {
+    const t = o.t;
+    const osc = eng.oscNode(v, 'sine', 900, t, 0.16);
+    const g = eng.gainNode(v, 0);
+    eng.chain(osc, g, v.out);
+    eng.sweep(osc.frequency, t, 1500 * o.pitch, 620 * o.pitch, 0.12);
+    eng.envAD(g.gain, t, o.gain * 0.3, 0.003, 0.13);
+    noiseBurst(eng, v, v.out, t, o.gain * 0.1, 0.04, 'bandpass', 3200, 5, 1, 0.001);
+    return 0.3;
+  },
+  lava_pop(eng, v, o) {
+    const t = o.t;
+    thump(eng, v, v.out, t, o.gain * 0.4, 160 * o.pitch, 55 * o.pitch, 0.2);
+    noiseBurst(eng, v, v.out, t, o.gain * 0.18, 0.12, 'lowpass', 700, 1.1, 0.7, 0.004, true);
+    return 0.35;
+  },
+  cricket(eng, v, o) {
+    const t = o.t;
+    let cursor = t;
+    for (let i = 0; i < 4; i++) {
+      noiseBurst(eng, v, v.out, cursor, o.gain * 0.16, 0.022, 'bandpass', 4600 * o.pitch, 22, 1, 0.002);
+      cursor += 0.055;
+    }
+    return 0.35;
+  },
+  wind_gust(eng, v, o) {
+    const t = o.t;
+    const f = noiseBurst(eng, v, v.out, t, o.gain * 0.2, 2.2, 'bandpass', 700, 1.1, 0.8, 0.9, true);
+    eng.sweep(f.frequency, t, 500, 1300, 2);
+    return 3.2;
+  },
+});
+
+/* ========================================================================== */
+/* Creature voices                                                            */
+/* ========================================================================== */
+
+/**
+ * A formant-filtered voice: one oscillator with a three-point pitch glide and
+ * optional vibrato, split through a bank of resonant band-passes. This single
+ * generator covers every animal and humanoid grunt in the game — only the
+ * formant table changes.
+ * @param {AudioEngine} eng the engine
+ * @param {{nodes:AudioNode[], sources:AudioScheduledSourceNode[]}} h owner
+ * @param {AudioNode} out destination node
+ * @param {number} t start time
+ * @param {{f0:number, mid:number, end:number, dur:number, level:number,
+ *   wave?:OscillatorType, noise?:number, vib?:number, vibDepth?:number,
+ *   formants:readonly (readonly number[])[]}} p voice parameters
+ * @returns {number} the length of the sound in seconds
+ */
+function formantVoice(eng, h, out, t, p) {
+  const dur = Math.max(0.06, p.dur);
+  const osc = eng.oscNode(h, p.wave || 'sawtooth', clampFreq(p.f0), t, dur + 0.1);
+  eng.sweep3(osc.frequency, t, clampFreq(p.f0), clampFreq(p.mid), clampFreq(p.end), dur);
+  if (p.vib) eng.vibrato(h, osc, t, dur + 0.1, p.vib, p.vibDepth || 20);
+
+  const env = eng.gainNode(h, 0);
+  env.connect(out);
+  eng.envAHD(env.gain, t, p.level, Math.min(0.06, dur * 0.18), dur * 0.22, dur * 0.75);
+
+  for (let i = 0; i < p.formants.length; i++) {
+    const fm = p.formants[i];
+    const bp = eng.biquad(h, 'bandpass', fm[0], fm[1]);
+    const fg = eng.gainNode(h, fm[2]);
+    osc.connect(bp);
+    bp.connect(fg);
+    fg.connect(env);
+  }
+  if (p.noise && p.noise > 0) {
+    const src = eng.noiseNode(h, t, dur + 0.1, 1);
+    const bp = eng.biquad(h, 'bandpass', clampFreq(p.formants[0][0] * 1.4), 1.6);
+    const ng = eng.gainNode(h, p.noise * 0.5);
+    eng.chain(src, bp, ng, env);
+  }
+  return dur + 0.35;
+}
+
+/**
+ * How the six sound kinds modulate a creature voice.
+ * @type {Readonly<Object<string, {gain:number, pitch:number, dur:number, drop:number}>>}
+ */
+const MOB_KINDS = Object.freeze({
+  idle: { gain: 0.55, pitch: 1.0, dur: 1.0, drop: 1.0 },
+  hurt: { gain: 0.95, pitch: 1.2, dur: 0.55, drop: 0.82 },
+  death: { gain: 1.0, pitch: 0.9, dur: 1.5, drop: 0.55 },
+  attack: { gain: 0.9, pitch: 1.12, dur: 0.6, drop: 1.1 },
+  step: { gain: 0.4, pitch: 1.0, dur: 0.5, drop: 1.0 },
+  special: { gain: 0.8, pitch: 1.05, dur: 1.15, drop: 1.2 },
+});
+
+/**
+ * Voice descriptors for every mob type of `game/mobs.js`. `synth` selects the
+ * generator, `stepGroup` the material its feet land on, `size` scales both the
+ * footstep weight and the pitch.
+ * @type {Readonly<Object<string, Object>>}
+ */
+const MOB_VOICES = Object.freeze({
+  zombie: {
+    synth: 'formant', dur: 0.85, level: 1, stepGroup: 'grass', size: 1,
+    f0: 106, mid: 96, end: 76, wave: 'sawtooth', noise: 0.3, vib: 5, vibDepth: 26,
+    formants: [[240, 6, 1], [560, 7, 0.55], [1150, 9, 0.25]],
+  },
+  husk: {
+    synth: 'formant', dur: 0.8, level: 0.95, stepGroup: 'sand', size: 1,
+    f0: 96, mid: 88, end: 70, wave: 'sawtooth', noise: 0.5, vib: 4, vibDepth: 20,
+    formants: [[280, 5, 1], [640, 6, 0.5], [1400, 8, 0.28]],
+  },
+  drowned: {
+    synth: 'formant', dur: 0.9, level: 0.95, stepGroup: 'water', size: 1,
+    f0: 100, mid: 90, end: 68, wave: 'sawtooth', noise: 0.45, vib: 6, vibDepth: 34,
+    formants: [[200, 6, 1], [430, 8, 0.6], [880, 10, 0.2]],
+  },
+  skeleton: { synth: 'rattle', dur: 0.7, level: 1, stepGroup: 'stone', size: 0.9 },
+  creeper: { synth: 'hiss', dur: 1.1, level: 1, stepGroup: 'grass', size: 0.9 },
+  spider: { synth: 'chitter', dur: 0.5, level: 0.9, stepGroup: 'gravel', size: 1.1 },
+  enderman: { synth: 'eerie', dur: 1.6, level: 1, stepGroup: 'stone', size: 1.3 },
+  witch: {
+    synth: 'formant', dur: 0.6, level: 0.85, stepGroup: 'grass', size: 0.95,
+    f0: 330, mid: 470, end: 250, wave: 'sawtooth', noise: 0.2, vib: 11, vibDepth: 75,
+    formants: [[780, 7, 1], [1500, 8, 0.55], [2900, 9, 0.2]],
+  },
+  slime: { synth: 'squelch', dur: 0.55, level: 0.9, stepGroup: 'wool', size: 1 },
+  pig: {
+    synth: 'formant', dur: 0.36, level: 0.85, stepGroup: 'grass', size: 0.9,
+    f0: 215, mid: 265, end: 165, wave: 'sawtooth', noise: 0.22, vib: 9, vibDepth: 40,
+    formants: [[500, 5, 1], [1120, 6, 0.45]],
+  },
+  cow: {
+    synth: 'formant', dur: 1.15, level: 0.95, stepGroup: 'grass', size: 1.3,
+    f0: 152, mid: 140, end: 108, wave: 'sawtooth', noise: 0.2, vib: 4.5, vibDepth: 20,
+    formants: [[420, 4, 1], [900, 5, 0.5], [2100, 7, 0.16]],
+  },
+  sheep: {
+    synth: 'formant', dur: 0.8, level: 0.85, stepGroup: 'wool', size: 1,
+    f0: 300, mid: 320, end: 245, wave: 'sawtooth', noise: 0.18, vib: 15, vibDepth: 60,
+    formants: [[720, 6, 1], [1400, 6, 0.45], [2600, 8, 0.14]],
+  },
+  chicken: {
+    synth: 'formant', dur: 0.17, level: 0.7, stepGroup: 'grass', size: 0.5,
+    f0: 620, mid: 940, end: 500, wave: 'square', noise: 0.15, vib: 0, vibDepth: 0,
+    formants: [[1500, 6, 1], [2900, 8, 0.35]],
+  },
+  wolf: {
+    synth: 'formant', dur: 0.42, level: 0.9, stepGroup: 'grass', size: 1,
+    f0: 265, mid: 410, end: 180, wave: 'sawtooth', noise: 0.28, vib: 6, vibDepth: 30,
+    formants: [[600, 5, 1], [1250, 6, 0.5], [2600, 8, 0.16]],
+  },
+  cat: {
+    synth: 'formant', dur: 0.6, level: 0.75, stepGroup: 'wool', size: 0.6,
+    f0: 520, mid: 720, end: 430, wave: 'sawtooth', noise: 0.12, vib: 7, vibDepth: 45,
+    formants: [[900, 6, 1], [1900, 7, 0.4]],
+  },
+  horse: {
+    synth: 'formant', dur: 0.95, level: 1, stepGroup: 'stone', size: 1.4,
+    f0: 245, mid: 390, end: 150, wave: 'sawtooth', noise: 0.35, vib: 13, vibDepth: 80,
+    formants: [[560, 5, 1], [1250, 6, 0.5], [2400, 8, 0.2]],
+  },
+  villager: {
+    synth: 'formant', dur: 0.45, level: 0.8, stepGroup: 'grass', size: 1,
+    f0: 180, mid: 205, end: 162, wave: 'triangle', noise: 0.12, vib: 6, vibDepth: 18,
+    formants: [[520, 6, 1], [1300, 7, 0.4], [2500, 8, 0.12]],
+  },
+  iron_golem: { synth: 'clank', dur: 1.1, level: 1, stepGroup: 'stone', size: 1.8 },
+  fox: {
+    synth: 'formant', dur: 0.28, level: 0.7, stepGroup: 'grass', size: 0.7,
+    f0: 520, mid: 820, end: 470, wave: 'sawtooth', noise: 0.2, vib: 8, vibDepth: 40,
+    formants: [[1100, 6, 1], [2200, 7, 0.4]],
+  },
+  rabbit: {
+    synth: 'formant', dur: 0.11, level: 0.55, stepGroup: 'grass', size: 0.4,
+    f0: 880, mid: 1150, end: 800, wave: 'sine', noise: 0.1, vib: 0, vibDepth: 0,
+    formants: [[1600, 7, 1], [3200, 8, 0.3]],
+  },
+  bat: { synth: 'squeak', dur: 0.2, level: 0.5, stepGroup: 'wool', size: 0.3 },
+  squid: { synth: 'squirt', dur: 0.4, level: 0.6, stepGroup: 'water', size: 0.9 },
+});
+
+/**
+ * Synthesise a creature sound. `mob.<type>.<kind>` names route here.
+ * @param {AudioEngine} eng the engine
+ * @param {Voice} v the voice being filled
+ * @param {Object} o playback options (`t`, `gain`, `pitch`)
+ * @param {Object} voice a {@link MOB_VOICES} descriptor
+ * @param {string} kindName a key of {@link MOB_KINDS}
+ * @returns {number} the length of the sound in seconds
+ */
+function mobSynth(eng, v, o, voice, kindName) {
+  const k = MOB_KINDS[kindName] || MOB_KINDS.idle;
+  const t = o.t;
+  const out = v.out;
+  const size = voice.size || 1;
+
+  if (kindName === 'step') {
+    const g = GROUPS[voice.stepGroup] || GROUPS.grass;
+    return digSynth(eng, v, {
+      t, gain: o.gain * clamp(0.45 + size * 0.4, 0.3, 1.4), pitch: o.pitch / size,
+    }, g, 'step');
+  }
+
+  const pitch = o.pitch * k.pitch / Math.pow(size, 0.45);
+  const level = o.gain * k.gain * (voice.level || 1);
+  const dur = (voice.dur || 0.5) * k.dur;
+
+  switch (voice.synth) {
+    case 'rattle': {
+      /* dry bones: a burst of short, high, resonant impulses */
+      const count = kindName === 'death' ? 14 : (kindName === 'hurt' ? 7 : 9);
+      const span = impulseTrain(eng, v, out, t, count, dur / count,
+        1900 * pitch, 14, level * 0.5, 0.028);
+      partials(eng, v, out, t, 640 * pitch, [1, 2.6, 4.1], 0.18, level * 0.12);
+      return span + 0.3;
+    }
+    case 'hiss': {
+      /* the fuse-like rising hiss right before it goes off */
+      const f = noiseBurst(eng, v, out, t, level * 0.55, dur, 'bandpass',
+        700 * pitch, 2.2, 1, dur * 0.25);
+      eng.sweep(f.frequency, t, 700 * pitch, 2700 * pitch, dur);
+      /* a second, higher band an octave up thickens the hiss */
+      const f2 = noiseBurst(eng, v, out, t + dur * 0.1, level * 0.2, dur * 0.8, 'bandpass',
+        1800 * pitch, 3, 1, dur * 0.3);
+      eng.sweep(f2.frequency, t + dur * 0.1, 1800 * pitch, 5200 * pitch, dur * 0.8);
+      return dur + 0.4;
+    }
+    case 'chitter': {
+      let cursor = t;
+      const count = kindName === 'death' ? 12 : 8;
+      for (let i = 0; i < count; i++) {
+        const f = (1200 + eng.rand() * 1500) * pitch;
+        const osc = eng.oscNode(v, 'square', f, cursor, 0.035);
+        const bp = eng.biquad(v, 'bandpass', f, 6);
+        const g = eng.gainNode(v, 0);
+        eng.chain(osc, bp, g, out);
+        eng.sweep(osc.frequency, cursor, f, f * 0.7, 0.03);
+        eng.envAD(g.gain, cursor, level * 0.28, 0.002, 0.028);
+        cursor += 0.03 + eng.rand() * 0.05;
+      }
+      return cursor - t + 0.25;
+    }
+    case 'eerie': {
+      /* two barely detuned sines plus a slow warble — deeply unsettling */
+      const base = 168 * pitch;
+      const a = eng.oscNode(v, 'sine', base, t, dur + 0.2);
+      const b = eng.oscNode(v, 'sine', base * 1.007, t, dur + 0.2, 9);
+      const c = eng.oscNode(v, 'triangle', base * 2.41, t, dur + 0.2);
+      const lp = eng.biquad(v, 'lowpass', 1200, 3);
+      const g = eng.gainNode(v, 0);
+      const cg = eng.gainNode(v, 0.18);
+      eng.chain(a, lp, g, out);
+      b.connect(lp);
+      eng.chain(c, cg, lp);
+      eng.vibrato(v, a, t, dur + 0.2, 0.9, 45);
+      eng.sweep3(a.frequency, t, base, base * 1.18, base * k.drop, dur);
+      eng.sweep(lp.frequency, t, 600, 2200, dur * 0.7);
+      eng.envAHD(g.gain, t, level * 0.4, dur * 0.25, dur * 0.2, dur * 0.7);
+      return dur + 0.6;
+    }
+    case 'squelch': {
+      const f = noiseBurst(eng, v, out, t, level * 0.45, dur, 'lowpass', 900 * pitch, 1.4, 0.8, 0.01);
+      eng.sweep(f.frequency, t, 1100 * pitch, 320 * pitch, dur);
+      thump(eng, v, out, t, level * 0.35, 140 * pitch, 62 * pitch, dur * 0.7, 'triangle');
+      return dur + 0.3;
+    }
+    case 'clank': {
+      noiseBurst(eng, v, out, t, level * 0.4, 0.07, 'bandpass', 2400 * pitch, 4, 1, 0.001);
+      partials(eng, v, out, t, 380 * pitch, [1, 2.14, 3.62, 5.1], dur * 0.8, level * 0.42);
+      thump(eng, v, out, t, level * 0.5, 118 * pitch, 46 * pitch, 0.34);
+      return dur + 0.7;
+    }
+    case 'squeak': {
+      const osc = eng.oscNode(v, 'sine', 3000 * pitch, t, dur + 0.05);
+      const g = eng.gainNode(v, 0);
+      eng.chain(osc, g, out);
+      eng.sweep3(osc.frequency, t, 2600 * pitch, 3600 * pitch, 2200 * pitch, dur);
+      eng.envAD(g.gain, t, level * 0.3, 0.008, dur);
+      /* wing beats */
+      for (let i = 0; i < 3; i++) {
+        noiseBurst(eng, v, out, t + i * 0.12, level * 0.12, 0.05, 'lowpass', 600, 1, 0.7, 0.01);
+      }
+      return dur + 0.45;
+    }
+    case 'squirt': {
+      const f = noiseBurst(eng, v, out, t, level * 0.4, dur, 'bandpass', 900 * pitch, 2.4, 1, 0.006);
+      eng.sweep(f.frequency, t, 1500 * pitch, 500 * pitch, dur);
+      return dur + 0.25;
+    }
+    default: {
+      return formantVoice(eng, v, out, t, {
+        f0: voice.f0 * pitch,
+        mid: voice.mid * pitch,
+        end: voice.end * pitch * k.drop,
+        dur,
+        wave: voice.wave || 'sawtooth',
+        level: level * 0.55,
+        noise: voice.noise || 0,
+        vib: voice.vib || 0,
+        vibDepth: voice.vibDepth || 0,
+        formants: voice.formants,
+      });
+    }
+  }
+}
+
+/* ========================================================================== */
+/* Ambience beds                                                              */
+/* ========================================================================== */
+
+/**
+ * Every ambience bed the engine knows, in mix order.
+ * @type {readonly string[]}
+ */
+const BED_NAMES = Object.freeze(['wind', 'rain', 'cave', 'water', 'lava', 'night']);
+
+/**
+ * Continuous layers of each bed. Built once per bed and modulated by LFOs, so
+ * they cost nothing per frame.
+ * @type {Readonly<Object<string, (eng:AudioEngine, bed:Object) => void>>}
+ */
+const BED_BUILDERS = Object.freeze({
+  wind(eng, bed) {
+    const t = eng.ctx.currentTime;
+    /* body: brown noise through a slowly breathing low-pass */
+    const src = eng.noiseNode(bed, t, Infinity, 1, true);
+    const hp = eng.biquad(bed, 'highpass', 70, 0.7);
+    const lp = eng.biquad(bed, 'lowpass', 430, 0.9);
+    const g = eng.gainNode(bed, 0.85);
+    eng.chain(src, hp, lp, g, bed.gain);
+    const lfo = eng.oscNode(bed, 'sine', 0.037, t, Infinity);
+    const amt = eng.gainNode(bed, 250);
+    lfo.connect(amt);
+    try { amt.connect(lp.frequency); } catch (_err) { /* ignore */ }
+    /* whistle: a narrow band that swells now and then */
+    const src2 = eng.noiseNode(bed, t, Infinity, 1);
+    const bp = eng.biquad(bed, 'bandpass', 950, 1.1);
+    const g2 = eng.gainNode(bed, 0.05);
+    eng.chain(src2, bp, g2, bed.gain);
+    const lfo2 = eng.oscNode(bed, 'sine', 0.019, t, Infinity);
+    const amt2 = eng.gainNode(bed, 0.045);
+    lfo2.connect(amt2);
+    try { amt2.connect(g2.gain); } catch (_err) { /* ignore */ }
+  },
+  rain(eng, bed) {
+    const t = eng.ctx.currentTime;
+    const src = eng.noiseNode(bed, t, Infinity, 1);
+    const bp = eng.biquad(bed, 'bandpass', 2100, 0.6);
+    const g = eng.gainNode(bed, 0.4);
+    eng.chain(src, bp, g, bed.gain);
+    const src2 = eng.noiseNode(bed, t, Infinity, 1, true);
+    const lp = eng.biquad(bed, 'lowpass', 620, 0.8);
+    const g2 = eng.gainNode(bed, 0.4);
+    eng.chain(src2, lp, g2, bed.gain);
+    const lfo = eng.oscNode(bed, 'sine', 0.06, t, Infinity);
+    const amt = eng.gainNode(bed, 0.1);
+    lfo.connect(amt);
+    try { amt.connect(g.gain); } catch (_err) { /* ignore */ }
+  },
+  cave(eng, bed) {
+    const t = eng.ctx.currentTime;
+    const src = eng.noiseNode(bed, t, Infinity, 0.6, true);
+    const lp = eng.biquad(bed, 'lowpass', 95, 0.9);
+    const g = eng.gainNode(bed, 0.9);
+    eng.chain(src, lp, g, bed.gain);
+    const lfo = eng.oscNode(bed, 'sine', 0.023, t, Infinity);
+    const amt = eng.gainNode(bed, 40);
+    lfo.connect(amt);
+    try { amt.connect(lp.frequency); } catch (_err) { /* ignore */ }
+  },
+  water(eng, bed) {
+    const t = eng.ctx.currentTime;
+    const src = eng.noiseNode(bed, t, Infinity, 0.8, true);
+    const lp = eng.biquad(bed, 'lowpass', 320, 1.1);
+    const g = eng.gainNode(bed, 0.8);
+    eng.chain(src, lp, g, bed.gain);
+    const lfo = eng.oscNode(bed, 'sine', 0.11, t, Infinity);
+    const amt = eng.gainNode(bed, 90);
+    lfo.connect(amt);
+    try { amt.connect(lp.frequency); } catch (_err) { /* ignore */ }
+  },
+  lava(eng, bed) {
+    const t = eng.ctx.currentTime;
+    const src = eng.noiseNode(bed, t, Infinity, 0.5, true);
+    const lp = eng.biquad(bed, 'lowpass', 170, 1);
+    const g = eng.gainNode(bed, 0.85);
+    eng.chain(src, lp, g, bed.gain);
+  },
+  night(eng, bed) {
+    const t = eng.ctx.currentTime;
+    const src = eng.noiseNode(bed, t, Infinity, 1, true);
+    const lp = eng.biquad(bed, 'lowpass', 240, 0.8);
+    const g = eng.gainNode(bed, 0.25);
+    eng.chain(src, lp, g, bed.gain);
+  },
+});
+
+/**
+ * Sparse random events per bed. Each call schedules one event at `t` and
+ * returns how long to wait before the next one.
+ * @type {Readonly<Object<string, (eng:AudioEngine, bed:Object, t:number) => number>>}
+ */
+const BED_EVENTS = Object.freeze({
+  rain(eng, bed, t) {
+    const h = eng.transient(t + 0.4);
+    noiseBurst(eng, h, bed.gain, t, 0.2 + eng.rand() * 0.3, 0.045, 'bandpass',
+      2200 + eng.rand() * 3800, 7, 1 + eng.rand(), 0.0015);
+    return 0.07 + eng.rand() * 0.2;
+  },
+  cave(eng, bed, t) {
+    const h = eng.transient(t + 6);
+    const r = eng.rand();
+    if (r < 0.45) {
+      /* a distant, barely tonal groan */
+      const base = 46 + eng.rand() * 46;
+      const a = eng.oscNode(h, 'sine', base, t, 4.2);
+      const b = eng.oscNode(h, 'sine', base * 1.49, t, 4.2, 11);
+      const lp = eng.biquad(h, 'lowpass', 320, 2);
+      const g = eng.gainNode(h, 0);
+      eng.chain(a, lp, g, bed.gain);
+      b.connect(lp);
+      eng.sweep(a.frequency, t, base, base * 0.86, 4);
+      eng.envAHD(g.gain, t, 0.16 + eng.rand() * 0.12, 1.4, 0.6, 2);
+    } else if (r < 0.8) {
+      /* a drip somewhere behind you */
+      const osc = eng.oscNode(h, 'sine', 1200, t, 0.18);
+      const g = eng.gainNode(h, 0);
+      eng.chain(osc, g, bed.gain);
+      eng.sweep(osc.frequency, t, 1400 + eng.rand() * 900, 520, 0.13);
+      eng.envAD(g.gain, t, 0.18, 0.003, 0.14);
+    } else {
+      /* loose gravel falling */
+      impulseTrain(eng, h, bed.gain, t, 4, 0.05, 1300, 3, 0.13, 0.03);
+    }
+    return 5 + eng.rand() * 16;
+  },
+  water(eng, bed, t) {
+    const h = eng.transient(t + 0.5);
+    const osc = eng.oscNode(h, 'sine', 320, t, 0.11);
+    const g = eng.gainNode(h, 0);
+    eng.chain(osc, g, bed.gain);
+    eng.sweep(osc.frequency, t, 260 + eng.rand() * 220, 700 + eng.rand() * 600, 0.08);
+    eng.envAD(g.gain, t, 0.1 + eng.rand() * 0.1, 0.004, 0.08);
+    return 0.2 + eng.rand() * 0.9;
+  },
+  lava(eng, bed, t) {
+    const h = eng.transient(t + 0.8);
+    thump(eng, h, bed.gain, t, 0.16 + eng.rand() * 0.14, 150 + eng.rand() * 90, 48, 0.22);
+    noiseBurst(eng, h, bed.gain, t, 0.08, 0.14, 'lowpass', 700, 1.1, 0.7, 0.004, true);
+    return 0.35 + eng.rand() * 1.3;
+  },
+  night(eng, bed, t) {
+    const h = eng.transient(t + 0.6);
+    const f = 4200 + eng.rand() * 1400;
+    let cursor = t;
+    const chirps = 3 + ((eng.rand() * 3) | 0);
+    for (let i = 0; i < chirps; i++) {
+      noiseBurst(eng, h, bed.gain, cursor, 0.1 + eng.rand() * 0.06, 0.02, 'bandpass', f, 24, 1, 0.002);
+      cursor += 0.05 + eng.rand() * 0.02;
+    }
+    return 0.5 + eng.rand() * 1.6;
+  },
+});
+
+/* ========================================================================== */
+/* Generative music                                                           */
+/* ========================================================================== */
+
+/**
+ * The four moods. `root` is a MIDI note, `chords` are semitone offsets from it,
+ * `scale` is the melodic vocabulary and `melody` the probability that a given
+ * eighth-note slot carries a note.
+ * @type {Readonly<Object<string, Object>>}
+ */
+const MOODS = Object.freeze({
+  calm: {
+    root: 48, tempo: 50, padWave: 'triangle', padCutoff: 1500, pad: 0.16,
+    bass: 0.1, melody: 0.2, melodyGain: 0.1, melodyWave: 'triangle', melodyOctave: 24,
+    scale: [0, 2, 4, 7, 9, 11],
+    chords: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [2, 5, 9], [0, 4, 9], [5, 9, 14]],
+  },
+  night: {
+    root: 45, tempo: 42, padWave: 'sine', padCutoff: 1000, pad: 0.17,
+    bass: 0.11, melody: 0.15, melodyGain: 0.085, melodyWave: 'sine', melodyOctave: 24,
+    scale: [0, 2, 3, 5, 7, 8, 10],
+    chords: [[0, 3, 7], [8, 12, 15], [5, 8, 12], [0, 3, 10], [3, 7, 10], [0, 5, 8]],
+  },
+  cave: {
+    root: 41, tempo: 34, padWave: 'sine', padCutoff: 620, pad: 0.15,
+    bass: 0.13, melody: 0.075, melodyGain: 0.07, melodyWave: 'sine', melodyOctave: 24,
+    scale: [0, 1, 3, 5, 6, 8, 10],
+    chords: [[0, 7, 12], [1, 8, 13], [0, 5, 10], [3, 10, 14], [0, 6, 11], [1, 6, 13]],
+  },
+  danger: {
+    root: 40, tempo: 66, padWave: 'sawtooth', padCutoff: 900, pad: 0.13,
+    bass: 0.15, melody: 0.24, melodyGain: 0.075, melodyWave: 'triangle', melodyOctave: 12,
+    scale: [0, 1, 3, 6, 7, 10],
+    chords: [[0, 6, 11], [0, 1, 7], [3, 6, 10], [0, 6, 13], [1, 7, 10], [0, 3, 6]],
+  },
+});
+
+/**
+ * The thirteen music discs. Each one renders deterministically from its name,
+ * so the same disc always plays the same piece.
+ * @type {Readonly<Object<string, {mood:string, tempo:number, pad:number,
+ *   melody:number, length:number}>>}
+ */
+const DISC_PROFILES = Object.freeze({
+  disc_13: { mood: 'cave', tempo: 46, pad: 0.2, melody: 0.3, length: 105 },
+  disc_cat: { mood: 'calm', tempo: 96, pad: 0.16, melody: 0.55, length: 110 },
+  disc_blocks: { mood: 'calm', tempo: 104, pad: 0.14, melody: 0.6, length: 100 },
+  disc_chirp: { mood: 'calm', tempo: 88, pad: 0.18, melody: 0.52, length: 96 },
+  disc_far: { mood: 'night', tempo: 72, pad: 0.22, melody: 0.42, length: 118 },
+  disc_mall: { mood: 'night', tempo: 66, pad: 0.2, melody: 0.4, length: 112 },
+  disc_mellohi: { mood: 'night', tempo: 58, pad: 0.24, melody: 0.34, length: 98 },
+  disc_stal: { mood: 'danger', tempo: 92, pad: 0.16, melody: 0.5, length: 120 },
+  disc_strad: { mood: 'calm', tempo: 78, pad: 0.2, melody: 0.46, length: 116 },
+  disc_ward: { mood: 'cave', tempo: 54, pad: 0.22, melody: 0.3, length: 122 },
+  disc_11: { mood: 'cave', tempo: 38, pad: 0.1, melody: 0.16, length: 74 },
+  disc_wait: { mood: 'calm', tempo: 84, pad: 0.18, melody: 0.5, length: 114 },
+  disc_pigstep: { mood: 'danger', tempo: 100, pad: 0.14, melody: 0.58, length: 96 },
+});
+
+/**
+ * A small, stable string hash — seeds the deterministic disc PRNG.
+ * @param {string} s input string
+ * @returns {number} a positive 31-bit integer
+ */
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 1) || 1;
+}
+

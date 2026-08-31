@@ -170,6 +170,13 @@ const MISS_CACHE_LIMIT = 8192;
 /** Safety valve so a pathological writer cannot spin `_drain()` forever. */
 const MAX_DRAIN_BATCHES = 512;
 
+/**
+ * Cap on the in-memory overflow store while a real database is in use, so a
+ * persistent quota error cannot grow the heap without bound. Not applied in
+ * true memory-fallback mode, where that map is the only storage there is.
+ */
+const MEM_OVERFLOW_LIMIT = 4096;
+
 /** Supported game modes; anything else falls back to `'survival'`. */
 const GAME_MODES = ['survival', 'creative', 'spectator'];
 
@@ -803,8 +810,9 @@ export async function requestPersistentStorage() {
   try {
     const nav = /** @type {any} */ (globalThis).navigator;
     const store = nav && nav.storage;
-    if (!store || typeof store.persist !== 'function') return false;
+    if (!store) return false;
     if (typeof store.persisted === 'function' && await store.persisted() === true) return true;
+    if (typeof store.persist !== 'function') return false;
     return await store.persist() === true;
   } catch (err) {
     warnOnce('persist', 'navigator.storage.persist() failed', err);
@@ -876,16 +884,14 @@ export class SaveManager {
     this._pending = new Map();
     /** @type {Map<string, Object>|null} The batch currently being committed. @private */
     this._inflight = null;
-    /** @type {((value:*)=>void)|null} Resolver of the current batch promise. @private */
-    this._batchResolve = null;
-    /** @type {Promise<*>|null} Promise handed out by `saveChunk()`. @private */
-    this._batchPromise = null;
     /** @type {*} Handle of the pending flush timer. @private */
     this._timer = null;
     /** @type {boolean} A `_drain()` loop is running. @private */
     this._draining = false;
     /** @type {Promise<void>|null} The running `_drain()` loop. @private */
     this._drainPromise = null;
+    /** @type {boolean} Every batch of the last drain committed cleanly. @private */
+    this._drainOk = true;
     /** @type {Promise<boolean>|null} In-flight `open()`. @private */
     this._opening = null;
 
@@ -1466,15 +1472,21 @@ export class SaveManager {
   /**
    * Queue one modified chunk for the next batch.
    *
-   * The snapshot is encoded synchronously, so the caller may reuse or
-   * neuter its buffers the moment this returns. The returned promise settles
-   * when the batch containing this chunk has been committed.
+   * The snapshot is encoded **synchronously**, so the caller may reuse, transfer
+   * or drop its buffers the moment this returns, and the returned promise
+   * resolves as soon as the record is queued — it deliberately does *not* wait
+   * for the transaction. Callers such as `World#save()` await this in a serial
+   * loop; blocking each iteration until the next timer tick would turn a
+   * hundred-chunk save into a hundred seconds. {@link SaveManager#flush} is the
+   * durability barrier (`World#save()` calls it right after its loop), and
+   * write failures are reported through {@link SaveManager#onError}.
    *
    * @param {string} worldId World id.
    * @param {number} cx Chunk X.
    * @param {number} cz Chunk Z.
    * @param {Object} data Output of `Chunk#serialize()`.
-   * @returns {Promise<boolean|null>} `true` once written, `null` on failure.
+   * @returns {Promise<boolean|null>} `true` when queued (or written, in memory
+   *   mode), `null` when the input was unusable or the manager is closed.
    */
   saveChunk(worldId, cx, cz, data) {
     if (this.closed) return Promise.resolve(null);
@@ -1493,7 +1505,7 @@ export class SaveManager {
     this._missCache.delete(key);
 
     if (this.memory) {
-      this._mem.chunks.set(key, record);
+      this._stashChunk(key, record);
       this.stats.chunksWritten++;
       this.stats.bytesWritten += chunkRecordBytes(record);
       return Promise.resolve(true);
@@ -1501,17 +1513,13 @@ export class SaveManager {
 
     this._pending.set(key, record);
     this.stats.queued = this._pending.size;
-    if (this._batchResolve === null) {
-      this._batchPromise = new Promise((resolve) => { this._batchResolve = resolve; });
-    }
-    const promise = this._batchPromise || Promise.resolve(true);
     if (this._pending.size >= MAX_BATCH) {
       this._clearTimer();
       this._drain();
     } else {
       this._scheduleFlush();
     }
-    return promise;
+    return Promise.resolve(true);
   }
 
   /**
@@ -1803,13 +1811,17 @@ export class SaveManager {
   _drain() {
     if (this._draining) return this._drainPromise || Promise.resolve();
     this._draining = true;
+    this._drainOk = true;
     this._drainPromise = (async () => {
       let guard = 0;
       while (this._pending.size !== 0 && guard < MAX_DRAIN_BATCHES) {
         guard++;
-        await this._flushBatch();
+        if (await this._flushBatch() === null) this._drainOk = false;
       }
-      if (guard >= MAX_DRAIN_BATCHES) warnOnce('drainGuard', 'flush loop hit its batch guard; queue stays non-empty');
+      if (guard >= MAX_DRAIN_BATCHES) {
+        warnOnce('drainGuard', 'flush loop hit its batch guard; queue stays non-empty');
+        this._drainOk = false;
+      }
       this._draining = false;
       this._drainPromise = null;
     })();
@@ -1827,9 +1839,6 @@ export class SaveManager {
     const batch = this._pending;
     this._pending = new Map();
     this.stats.queued = 0;
-    const resolve = this._batchResolve;
-    this._batchResolve = null;
-    this._batchPromise = null;
     this._inflight = batch;
 
     const started = nowMs();
@@ -1842,7 +1851,6 @@ export class SaveManager {
     }
     this.stats.lastFlushMs = nowMs() - started;
     this._inflight = null;
-    if (resolve !== null) resolve(ok);
     return ok;
   }
 
@@ -1856,7 +1864,7 @@ export class SaveManager {
     const db = await this._ensureDb();
     if (db === null) {
       // Degraded: keep the edits in memory so the session is not corrupted.
-      for (const [key, rec] of batch) this._mem.chunks.set(key, rec);
+      for (const [key, rec] of batch) this._stashChunk(key, rec);
       return null;
     }
     /** @type {IDBTransaction} */
@@ -1865,26 +1873,28 @@ export class SaveManager {
       tx = db.transaction(STORES.CHUNKS, 'readwrite');
     } catch (err) {
       this._reportWriteError(err, 'write');
-      for (const [key, rec] of batch) this._mem.chunks.set(key, rec);
+      for (const [key, rec] of batch) this._stashChunk(key, rec);
       return null;
     }
     const store = tx.objectStore(STORES.CHUNKS);
-    let failed = 0;
+    /** @type {string[]} Keys the store refused; kept in memory afterwards. */
+    const failedKeys = [];
     let bytes = 0;
-    for (const rec of batch.values()) {
+    for (const [key, rec] of batch) {
       try {
         const req = store.put(rec);
         req.onerror = (ev) => {
+          // preventDefault() keeps one bad record from aborting the whole batch.
           if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
           if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
-          failed++;
+          failedKeys.push(key);
           this._reportWriteError(req.error, 'write');
         };
         bytes += chunkRecordBytes(rec);
       } catch (err) {
         // Synchronous throw: DataCloneError from a rogue block entity, or a
         // dead transaction. Skip the record instead of losing the batch.
-        failed++;
+        failedKeys.push(key);
         this._reportWriteError(err, 'write');
       }
     }
@@ -1892,22 +1902,58 @@ export class SaveManager {
       await idbTransaction(tx);
     } catch (err) {
       this._reportWriteError(err, 'write');
-      for (const [key, rec] of batch) this._mem.chunks.set(key, rec);
+      for (const [key, rec] of batch) this._stashChunk(key, rec);
       return null;
     }
+    // Whatever the store refused (quota, clone) stays in memory so the running
+    // session keeps its edits even though they will not survive a reload.
+    const refused = new Set(failedKeys);
+    for (let i = 0; i < failedKeys.length; i++) {
+      const key = failedKeys[i];
+      const rec = batch.get(key);
+      if (rec !== undefined) this._stashChunk(key, rec);
+    }
+    // Anything that *did* land must drop out of the overflow store, otherwise
+    // an older stashed copy would shadow the fresh row on the next read.
+    if (this._mem.chunks.size !== 0) {
+      for (const key of batch.keys()) if (!refused.has(key)) this._mem.chunks.delete(key);
+    }
     this.stats.batches++;
-    this.stats.chunksWritten += Math.max(0, batch.size - failed);
+    this.stats.chunksWritten += Math.max(0, batch.size - failedKeys.length);
     this.stats.bytesWritten += bytes;
-    return failed === 0 ? true : null;
+    return failedKeys.length === 0 ? true : null;
   }
 
   /**
-   * Commit everything that is queued and wait for it.
+   * Park a chunk record in the in-memory overflow store. In true memory mode
+   * this map *is* the storage and never evicts; when it is only catching failed
+   * database writes it is capped so a persistent quota error cannot grow the
+   * heap without bound.
+   * @param {string} key Chunk cache key.
+   * @param {Object} rec Encoded record.
+   * @returns {void}
+   * @private
+   */
+  _stashChunk(key, rec) {
+    this._mem.chunks.set(key, rec);
+    if (this.memory) return;
+    while (this._mem.chunks.size > MEM_OVERFLOW_LIMIT) {
+      const oldest = this._mem.chunks.keys().next().value;
+      if (oldest === undefined) break;
+      this._mem.chunks.delete(oldest);
+    }
+  }
+
+  /**
+   * Commit everything that is queued and wait for it. This is the durability
+   * barrier: after it resolves `true`, every chunk handed to
+   * {@link SaveManager#saveChunk} before the call is on disk.
    * @returns {Promise<boolean|null>} `true` when the queue is empty and every
    *   write succeeded, `null` when at least one write failed.
    */
   async flush() {
     if (this.memory) return true;
+    if (this._pending.size === 0 && !this._draining) return this._drainOk ? true : null;
     this._clearTimer();
     try {
       await this._drain();
@@ -1915,7 +1961,7 @@ export class SaveManager {
       this._reportWriteError(err, 'write');
       return null;
     }
-    return this._pending.size === 0 ? true : null;
+    return this._drainOk && this._pending.size === 0 ? true : null;
   }
 
   /* ---------------------------------------------------------------- close -- */

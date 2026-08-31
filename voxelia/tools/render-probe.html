@@ -139,9 +139,16 @@ function placeCamera() {
 function buildOrientationScene() {
   const bx = 0, bz = 0;
   const by = Math.max(70, Math.floor(world.getHeight(0, 0) || 70) + 6);
-  const set = (x, y, z, id) => world.setBlock(bx + x, by + y, bz + z, id);
-  // Clear a room.
+  let writes = 0;
+  const set = (x, y, z, id) => {
+    const wx = bx + x, wy = by + y, wz = bz + z;
+    if (world.getBlock(wx, wy, wz) === id) return; // avoid needless relight cascades
+    world.setBlock(wx, wy, wz, id);
+    writes++;
+  };
+  P.stage = 'testscene:clear';
   for (let x = -3; x <= 14; x++) for (let z = -3; z <= 10; z++) for (let y = -1; y <= 10; y++) set(x, y, z, 0);
+  P.testWrites = writes;
   // Floor.
   for (let x = -2; x <= 13; x++) for (let z = -2; z <= 9; z++) set(x, -1, z, B.GRASS_BLOCK);
   // A wall of grass blocks, three high, seen face-on from -Z.
@@ -160,7 +167,7 @@ function buildOrientationScene() {
   vec3.set(camera.position, 6.5, by + 1.4, bz - 5.5);
   camera.yaw = 0; camera.pitch = 0;
   updateCamera();
-  P.testScene = { origin: [bx, by, bz] };
+  P.testScene = { origin: [bx, by, bz], writes };
 }
 
 const frame = {
@@ -276,8 +283,18 @@ if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
 if (P.ready && num('testscene', 0)) {
   try {
     buildOrientationScene();
-    // Let the edits re-mesh and re-light before the first frame.
-    for (let i = 0; i < 600; i++) world.update(1 / 60, camera.position, camera.frustum);
+    // Let the edits re-mesh and re-light before the first frame, reporting
+    // progress so a slow rebuild is visible instead of looking like a hang.
+    P.stage = 'testscene:remesh';
+    for (let i = 0; i < 400; i++) {
+      world.update(1 / 60, camera.position, camera.frustum);
+      if ((i & 31) === 0) {
+        const st = world.getStats();
+        P.chunks = st;
+        P.stage = `testscene:remesh ${i} q=${st.queued} m=${st.meshing} l=${st.lightQueue}`;
+        if (st.queued === 0 && st.meshing === 0 && st.lightQueue === 0 && i > 64) break;
+      }
+    }
     P.stage = 'rendering';
   } catch (e) { fail('testscene', e); }
 }
