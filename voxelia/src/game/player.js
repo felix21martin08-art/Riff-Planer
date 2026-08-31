@@ -160,9 +160,10 @@ function setBlockValue(table, name, value) {
  * @type {Float32Array}
  */
 const GROUND_SLIP = new Float32Array(BLOCK_COUNT).fill(1);
-setBlockValue(GROUND_SLIP, 'ice', 0.11);
-setBlockValue(GROUND_SLIP, 'packed_ice', 0.09);
-setBlockValue(GROUND_SLIP, 'blue_ice', 0.06);
+setBlockValue(GROUND_SLIP, 'ice', 0.07);
+setBlockValue(GROUND_SLIP, 'packed_ice', 0.055);
+setBlockValue(GROUND_SLIP, 'blue_ice', 0.04);
+setBlockValue(GROUND_SLIP, 'frosted_ice', 0.07);
 setBlockValue(GROUND_SLIP, 'slime_block', 0.55);
 setBlockValue(GROUND_SLIP, 'honey_block', 1.8);
 
@@ -471,8 +472,6 @@ export class Player extends EventBus {
     this._rayOrigin = new Float32Array(3);
     /** @type {Float32Array} Scratch camera ray direction. @private */
     this._rayDir = new Float32Array(3);
-    /** @type {Float32Array} Scratch look-at target. @private */
-    this._lookTarget = new Float32Array(3);
 
     this._syncAABB();
     this.prevPosition.set(this.position);
@@ -656,10 +655,6 @@ export class Player extends EventBus {
       moveX = Number.isFinite(axis[0]) ? axis[0] : 0;
       moveZ = Number.isFinite(axis[1]) ? axis[1] : 0;
     }
-    if (this.dead || this.gameMode === 'spectator' && false) {
-      moveX = 0;
-      moveZ = 0;
-    }
     if (this.dead) {
       moveX = 0;
       moveZ = 0;
@@ -691,8 +686,8 @@ export class Player extends EventBus {
     /* ---- environment & pose ---------------------------------------------- */
     this._scanLiquid(w);
     this._scanEnvironment(w, moveMag);
+    this._updatePose(w, sneakHeld, moveMag, t);
     this._updateSprint(sprintHeld, moveZ, moveMag);
-    this._updatePose(w, sneakHeld, moveMag);
 
     /* ---- movement --------------------------------------------------------- */
     const wishX = moveZ * Math.sin(this.yaw) + moveX * Math.cos(this.yaw);
@@ -723,7 +718,7 @@ export class Player extends EventBus {
 
     /* ---- post move --------------------------------------------------------- */
     this._postMove(t, res, before);
-    this._updateVitals(t, moveMag);
+    this._updateVitals(t);
     this._consumeLatches();
   }
 
@@ -792,15 +787,9 @@ export class Player extends EventBus {
    */
   _scanEnvironment(world, moveMag) {
     const env = this._env;
-    env.groundBlock = 0;
     env.climb = 0;
     env.cobweb = false;
     env.powderSnow = false;
-    env.slip = 1;
-    env.speed = 1;
-    env.bounce = 0;
-    env.fallMul = 1;
-    env.noJump = false;
 
     const a = this.aabb;
     const x0 = Math.floor(a.minX + 1e-4);
@@ -825,15 +814,47 @@ export class Player extends EventBus {
       }
     }
 
-    /* ---- the block underneath the feet ------------------------------------ */
+    /* ---- climbing --------------------------------------------------------- */
+    this.climbing = !this.flying && env.climb > 0 &&
+      (env.climb === 1 || moveMag > 0.1) &&
+      this.gameMode !== 'spectator';
+
+    this._scanGroundBlock(world);
+  }
+
+  /**
+   * Identify the block directly beneath the feet and cache its movement
+   * modifiers. Called both before the move (friction, jump gating) and again
+   * afterwards, so a landing reads the block it actually landed on.
+   * @param {Object} world World instance.
+   * @returns {number} The block id under the feet, `0` when there is none.
+   */
+  _scanGroundBlock(world) {
+    const env = this._env;
+    env.groundBlock = 0;
+    env.slip = 1;
+    env.speed = 1;
+    env.bounce = 0;
+    env.fallMul = 1;
+    env.noJump = false;
+    if (!world || typeof world.getBlock !== 'function') return 0;
+
+    const a = this.aabb;
+    const x0 = Math.floor(a.minX + 1e-4);
+    const x1 = Math.floor(a.maxX - 1e-4);
+    const z0 = Math.floor(a.minZ + 1e-4);
+    const z1 = Math.floor(a.maxZ - 1e-4);
     const gy = Math.floor(a.minY - 0.08);
+
     let ground = 0;
-    for (let z = z0; z <= z1 && ground === 0; z++) {
+    let special = false;
+    for (let z = z0; z <= z1 && !special; z++) {
       for (let x = x0; x <= x1; x++) {
         const id = world.getBlock(x, gy, z);
         if (id === 0) continue;
         if (GROUND_SPECIAL[id]) {
           ground = id;
+          special = true;
           break;
         }
         if (ground === 0) ground = id;
@@ -847,11 +868,7 @@ export class Player extends EventBus {
       env.fallMul = GROUND_FALL_MUL[ground];
       env.noJump = GROUND_NO_JUMP[ground] === 1;
     }
-
-    /* ---- climbing --------------------------------------------------------- */
-    this.climbing = !this.flying && env.climb > 0 &&
-      (env.climb === 1 || moveMag > 0.1) &&
-      this.gameMode !== 'spectator';
+    return ground;
   }
 
   /**
@@ -881,9 +898,10 @@ export class Player extends EventBus {
    * @param {Object} world World instance.
    * @param {boolean} sneakHeld Sneak action currently down.
    * @param {number} moveMag Magnitude of the movement input.
+   * @param {number} dt Tick duration in seconds.
    * @returns {void}
    */
-  _updatePose(world, sneakHeld, moveMag) {
+  _updatePose(world, sneakHeld, moveMag, dt) {
     const spectator = this.gameMode === 'spectator';
     this.swimming = !this.flying && !spectator && this.submerged > 0.6 &&
       !this.onGround && (this.sprinting || moveMag > 0.1);
@@ -895,7 +913,7 @@ export class Player extends EventBus {
 
     const targetEye = this.swimming ? EYE_SWIMMING
       : (this.height <= HEIGHT_SNEAKING + 1e-4 ? EYE_SNEAKING : EYE_STANDING);
-    this.eyeHeight = damp(this.eyeHeight, targetEye, EYE_RESPONSE, 0.05);
+    this.eyeHeight = damp(this.eyeHeight, targetEye, EYE_RESPONSE, dt);
     if (Math.abs(this.eyeHeight - targetEye) < 1e-3) this.eyeHeight = targetEye;
   }
 
@@ -1006,7 +1024,7 @@ export class Player extends EventBus {
     applyBuoyancy(v, dt, deep, lava);
     applyDrag(v, dt, 0, (lava ? MEDIUM_DRAG.lava.y : MEDIUM_DRAG.water.y) * deep);
 
-    if (jumpHeld) {
+    if (jumpHeld || this._jumpBuffer > 0) {
       const up = SWIM_UP_SPEED * (lava ? 0.5 : 1);
       if (deep > 0.5) {
         if (v[1] < up) v[1] = up;
@@ -1070,7 +1088,6 @@ export class Player extends EventBus {
     speed *= this._env.speed;
     if (this._env.cobweb) speed *= COBWEB_SPEED;
     if (this._env.powderSnow) speed *= POWDER_SNOW_SPEED;
-    if (!this.onGround) speed *= 1.0;
     return speed;
   }
 
@@ -1115,11 +1132,17 @@ export class Player extends EventBus {
    */
   _postMove(dt, res, beforeY) {
     const y = this.position[1];
+    const justLanded = this.onGround && !this._wasOnGround;
+    // The pre-move scan saw the block under the *old* position; a landing must
+    // read the block that actually stopped us.
+    if (justLanded) this._scanGroundBlock(this.world);
 
     if (this.onGround) {
-      if (!this._wasOnGround) this._land(res);
+      // `_land` consumes `_highestY` and may bounce us straight back up, in
+      // which case it clears `onGround` again — so re-read it afterwards.
+      if (justLanded) this._land(res);
+      this._coyote = this.onGround ? COYOTE_TIME : 0;
       this._highestY = y;
-      this._coyote = COYOTE_TIME;
       this.fallDistance = 0;
     } else {
       if (y > this._highestY) this._highestY = y;
@@ -1133,7 +1156,9 @@ export class Player extends EventBus {
     }
     this._wasOnGround = this.onGround;
 
-    if (this.flying && this.onGround && this.velocity[1] <= 0 && this.gameMode !== 'spectator') {
+    // Flight ends when the player descends onto solid ground — never merely
+    // because it was enabled while already standing on it.
+    if (this.flying && justLanded && this.velocity[1] <= 0 && this.gameMode !== 'spectator') {
       this.flying = false;
       this.emit('fly', false);
     }
@@ -1174,7 +1199,8 @@ export class Player extends EventBus {
 
     /* ---- the void ---------------------------------------------------------- */
     if (this.position[1] < WORLD_MIN_Y - 32 && this.gameMode === 'survival') {
-      this.damage(4 * dt * 2, PLAYER_DAMAGE.VOID);
+      // The immunity window throttles this to roughly 8 half-hearts per second.
+      this.damage(4, PLAYER_DAMAGE.VOID);
     }
   }
 
@@ -1222,10 +1248,9 @@ export class Player extends EventBus {
    * Air supply, drowning and the hunger/saturation bookkeeping that belongs to
    * the controller itself.
    * @param {number} dt Tick duration in seconds.
-   * @param {number} moveMag Magnitude of the movement input.
    * @returns {void}
    */
-  _updateVitals(dt, moveMag) {
+  _updateVitals(dt) {
     if (!this.applyOwnAirDamage) return;
     const survival = this.gameMode === 'survival';
     const eyeSubmerged = this._isEyeInFluid();
@@ -1244,7 +1269,6 @@ export class Player extends EventBus {
       this._drownTimer = 0;
       if (this.air < MAX_AIR) this.air = Math.min(MAX_AIR, this.air + dt * 80);
     }
-    if (moveMag > 0 && this.dead) this.velocity[0] = 0;
   }
 
   /**
@@ -1526,10 +1550,21 @@ export class Player extends EventBus {
       rx = 1;
       rz = 0;
     }
-    const ux = rz * dy - 0 * dz;
-    const uy = 0 * dx - rx * dz;
-    const uz = rx * 0 - rz * dx;
-    const spread = 0.12;
+    // u = normalize(cross(r, d)) with r = (rx, 0, rz).
+    let ux = -rz * dy;
+    let uy = rz * dx - rx * dz;
+    let uz = rx * dy;
+    const ul = Math.hypot(ux, uy, uz);
+    if (ul > 1e-6) {
+      ux /= ul;
+      uy /= ul;
+      uz /= ul;
+    } else {
+      ux = 0;
+      uy = 1;
+      uz = 0;
+    }
+    const spread = 0.14;
 
     const origin = this._rayOrigin;
     const dir = this._rayDir;
@@ -1540,7 +1575,7 @@ export class Player extends EventBus {
     for (let i = 0; i < CAMERA_PROBES.length; i++) {
       const p = CAMERA_PROBES[i];
       origin[0] = ex + (rx * p[0] + ux * p[1]) * spread;
-      origin[1] = ey + (uy * p[1]) * spread;
+      origin[1] = ey + uy * p[1] * spread;
       origin[2] = ez + (rz * p[0] + uz * p[1]) * spread;
       let hit = null;
       try {
@@ -1934,7 +1969,10 @@ export class Player extends EventBus {
   dispose() {
     this.world = null;
     this.inventory = null;
-    if (typeof this.off === 'function' && this._events) this._events.clear?.();
+    this.input = null;
+    if (this._listeners && typeof this._listeners.clear === 'function') {
+      this._listeners.clear();
+    }
   }
 }
 

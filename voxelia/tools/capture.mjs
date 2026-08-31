@@ -77,6 +77,7 @@ await page.evaluate(() => { const h = document.getElementById('hud'); if (h) h.s
 const results = []
 for (const scene of scenes) {
   const applied = await page.evaluate(cfg => window.__probeApply(cfg), scene.cfg)
+  if (applied.inSolid) console.log(`  ! ${scene.id}: camera is inside a solid block — the shot will show back-face holes`)
   const before = await page.evaluate(() => window.__probe.frames)
   // Let several full frames render so TAA converges and history settles.
   await page.waitForFunction(n => window.__probe.frames >= n, before + FRAMES, { timeout: 600000, polling: 1000 })

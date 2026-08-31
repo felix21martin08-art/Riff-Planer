@@ -93,11 +93,14 @@ export const MEDIUM_DRAG = Object.freeze({
 
 /**
  * Upward acceleration applied to a fully submerged entity, in blocks/s².
- * Water lifts less than gravity pulls (so you sink slowly when idle), lava
- * lifts slightly less than water but its huge drag makes it feel thick.
+ *
+ * Both values sit just below the reduced in-fluid gravity (`GRAVITY * 0.35`),
+ * so an idle entity sinks slowly instead of bobbing to the surface like a cork,
+ * and swimming up is a deliberate act. Lava lifts marginally more but its huge
+ * drag makes it feel thick.
  * @type {Readonly<{water:number, lava:number}>}
  */
-export const BUOYANCY = Object.freeze({ water: 22.0, lava: 25.0 });
+export const BUOYANCY = Object.freeze({ water: 9.0, lava: 10.0 });
 
 /* ------------------------------------------------------------------------- */
 /* Module scratch state (never reallocated)                                   */

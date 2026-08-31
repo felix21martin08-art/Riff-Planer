@@ -13,6 +13,7 @@ import { Settings } from '../src/core/settings.js';
 import { World } from '../src/world/world.js';
 import { Renderer } from '../src/render/renderer.js';
 import { mat4, vec3, Frustum } from '../src/core/math.js';
+import { isSolid } from '../src/world/blocks.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
@@ -101,6 +102,33 @@ function updateCamera() {
 }
 updateCamera();
 
+/** True when (x,y,z) is a non-solid block the camera can sit in. */
+function isClear(x, y, z) {
+  const id = world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z));
+  return id === 0 || !isSolid(id);
+}
+
+/**
+ * Place the camera in open air above the terrain of ITS OWN column, with two
+ * blocks of headroom, and record whether it ended up inside a solid block.
+ * @returns {boolean} true when a valid spot was found
+ */
+function placeCamera() {
+  const cx = num('x', 8.5), cz = num('z', 8.5);
+  const h = world.getHeight(Math.floor(cx), Math.floor(cz));
+  if (!Number.isFinite(h)) return false;
+  for (let y = Math.max(h, -60); y < 300; y++) {
+    if (isClear(cx, y, cz) && isClear(cx, y + 1, cz) && isClear(cx, y + 2, cz)) {
+      vec3.set(camera.position, cx, y + 1.7 + num('dy', 0), cz);
+      P.spawnHeight = h;
+      P.cameraInSolid = !isClear(camera.position[0], camera.position[1], camera.position[2]);
+      updateCamera();
+      return true;
+    }
+  }
+  return false;
+}
+
 const frame = {
   camera, world, entities: null, player: null, environment: env,
   particles: null, hit: null, breakProgress: 0, time: 0, dt: 1 / 60, frameIndex: 0,
@@ -137,13 +165,7 @@ async function settle() {
       const idle = st.queued === 0 && st.meshing === 0 && st.generating === 0 && (st.lightQueue | 0) === 0;
       if (idle && ++idleRuns >= 3) break;
       if (!idle) idleRuns = 0;
-      if (!placed && world.isLoaded(0, 0)) {
-        const h = world.getHeight(0, 0);
-        if (Number.isFinite(h) && h > -60) {
-          vec3.set(camera.position, 8.5, Math.max(h + 2.6, 64), 8.5);
-          placed = true; updateCamera();
-        }
-      }
+      if (!placed && world.isLoaded(0, 0)) placed = placeCamera();
     }
     await new Promise(r => setTimeout(r, 0));
   }
@@ -205,8 +227,15 @@ window.__probeApply = (cfg = {}) => {
   if (cfg.setting) for (const [k, v] of Object.entries(cfg.setting)) settings.set(k, v);
   env.update();
   updateCamera();
+  if (cfg.dy !== undefined || cfg.pos) {
+    // Never allow a repositioned camera to end up buried in terrain.
+    let guard = 0;
+    while (!isClear(camera.position[0], camera.position[1], camera.position[2]) && guard++ < 400) camera.position[1] += 1;
+    updateCamera();
+  }
+  P.cameraInSolid = !isClear(camera.position[0], camera.position[1], camera.position[2]);
   P.applied = cfg;
-  return { camera: [...camera.position], time: env.timeOfDay, fog: env.fogDensity };
+  return { camera: [...camera.position], inSolid: P.cameraInSolid, time: env.timeOfDay, fog: env.fogDensity };
 };
 window.__probeStats = () => { try { return world.getStats(); } catch { return null; } };
 if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
