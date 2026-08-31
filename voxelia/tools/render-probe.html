@@ -13,7 +13,7 @@ import { Settings } from '../src/core/settings.js';
 import { World } from '../src/world/world.js';
 import { Renderer } from '../src/render/renderer.js';
 import { mat4, vec3, Frustum } from '../src/core/math.js';
-import { isSolid } from '../src/world/blocks.js';
+import { isSolid, B } from '../src/world/blocks.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
@@ -129,6 +129,40 @@ function placeCamera() {
   return false;
 }
 
+/**
+ * Build a hand-made scene with unambiguous orientation: a grass platform, a
+ * wall of grass blocks seen face-on, plants, flowers and an oak log lying both
+ * upright and flat. Terrain screenshots cannot settle which way a texture is
+ * mapped; this can.
+ * @returns {void}
+ */
+function buildOrientationScene() {
+  const bx = 0, bz = 0;
+  const by = Math.max(70, Math.floor(world.getHeight(0, 0) || 70) + 6);
+  const set = (x, y, z, id) => world.setBlock(bx + x, by + y, bz + z, id);
+  // Clear a room.
+  for (let x = -3; x <= 14; x++) for (let z = -3; z <= 10; z++) for (let y = -1; y <= 10; y++) set(x, y, z, 0);
+  // Floor.
+  for (let x = -2; x <= 13; x++) for (let z = -2; z <= 9; z++) set(x, -1, z, B.GRASS_BLOCK);
+  // A wall of grass blocks, three high, seen face-on from -Z.
+  for (let x = 0; x <= 3; x++) for (let y = 0; y <= 2; y++) set(x, y, 6, B.GRASS_BLOCK);
+  // Dirt, stone and sand columns next to it for comparison.
+  for (let y = 0; y <= 2; y++) { set(5, y, 6, B.DIRT); set(6, y, 6, B.STONE); set(7, y, 6, B.SAND); }
+  // Upright log (top texture on top) and a flat log (side texture on top).
+  for (let y = 0; y <= 2; y++) set(9, y, 6, B.OAK_LOG);
+  set(11, 0, 6, B.OAK_LOG); set(12, 0, 6, B.OAK_PLANKS);
+  // Plants and flowers standing on the floor.
+  const plants = [B.SHORT_GRASS, B.DANDELION, B.POPPY, B.SHORT_GRASS, B.POPPY, B.DANDELION];
+  for (let i = 0; i < plants.length; i++) if (plants[i] !== undefined) set(i * 2, 0, 2, plants[i]);
+  // A torch and a glowing block so emissive orientation is visible too.
+  if (B.TORCH !== undefined) set(9, 0, 2, B.TORCH);
+  if (B.GLOWSTONE !== undefined) set(12, 0, 2, B.GLOWSTONE);
+  vec3.set(camera.position, 6.5, by + 1.4, bz - 5.5);
+  camera.yaw = 0; camera.pitch = 0;
+  updateCamera();
+  P.testScene = { origin: [bx, by, bz] };
+}
+
 const frame = {
   camera, world, entities: null, player: null, environment: env,
   particles: null, hit: null, breakProgress: 0, time: 0, dt: 1 / 60, frameIndex: 0,
@@ -239,6 +273,14 @@ window.__probeApply = (cfg = {}) => {
 };
 window.__probeStats = () => { try { return world.getStats(); } catch { return null; } };
 if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
+if (P.ready && num('testscene', 0)) {
+  try {
+    buildOrientationScene();
+    // Let the edits re-mesh and re-light before the first frame.
+    for (let i = 0; i < 600; i++) world.update(1 / 60, camera.position, camera.frustum);
+    P.stage = 'rendering';
+  } catch (e) { fail('testscene', e); }
+}
 last = performance.now();
 schedule();
 window.__voxReady = true;
