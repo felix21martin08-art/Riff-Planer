@@ -72,9 +72,9 @@ const GBUFFER_CLEAR_COLOR = Object.freeze([0, 0, 0, 0]);
  *
  * `VOX_FACE_T` is the world direction of increasing `a_uv.x` and `VOX_FACE_B`
  * the world direction of increasing `a_uv.y`, exactly as `world/mesher.js`
- * emits them: side faces get a downward V (`q_v = (1 - dv) * h`), the two
- * horizontal faces get `+Z` (`q_v = dv * h`). Matching the mesher here is what
- * makes both the normal maps and the parallax march come out the right way up.
+ * emits them: side faces get an upward V (`q_v = dv * h`, so `+Y`), the two
+ * horizontal faces get `+Z`. Matching the mesher here is what makes both the
+ * normal maps and the parallax march come out the right way up.
  *
  * @type {string}
  */
@@ -90,9 +90,9 @@ const vec3 VOX_FACE_T[6] = vec3[6](
   vec3( 1.0,  0.0,  0.0), vec3( 1.0,  0.0,  0.0));
 
 const vec3 VOX_FACE_B[6] = vec3[6](
-  vec3( 0.0, -1.0,  0.0), vec3( 0.0, -1.0,  0.0),
+  vec3( 0.0,  1.0,  0.0), vec3( 0.0,  1.0,  0.0),
   vec3( 0.0,  0.0,  1.0), vec3( 0.0,  0.0,  1.0),
-  vec3( 0.0, -1.0,  0.0), vec3( 0.0, -1.0,  0.0));
+  vec3( 0.0,  1.0,  0.0), vec3( 0.0,  1.0,  0.0));
 `;
 
 /**
@@ -138,7 +138,7 @@ float voxSwayWeight(int flags, vec2 uv) {
   if ((flags & VOX_FLAG_WAVES) == 0) return 0.0;
   bool plant = (flags & VOX_FLAG_PARALLAX) == 0;
   if (!plant) return 0.55;
-  return clamp(1.0 - uv.y, 0.0, 1.0);
+  return clamp(uv.y, 0.0, 1.0);
 }
 `;
 

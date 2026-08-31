@@ -83,6 +83,14 @@ import { BIOME_COUNT, biomeGrassColor, biomeFoliageColor, biomeWaterColor } from
 export const VERTEX_STRIDE = 32;
 
 /**
+ * UV convention: `v` increases UPWARD in world space on vertical faces and on
+ * cross models, matching how `render/textures.js` authors every material
+ * (grass blades rooted at v=0, the grass overhang of a side texture at v=1).
+ * The tangent basis in `render/gbuffer.js` (`VOX_FACE_B`) must agree with this
+ * or normal maps and the parallax march come out mirrored.
+ */
+
+/**
  * Index of the opaque output bucket.
  * @type {number}
  */
@@ -1030,7 +1038,7 @@ function emitMaskQuad(dir, plane, u0, v0, w, h, n) {
     q_y[c] = uy * uu + vy * vv + ny * plane;
     q_z[c] = uz * uu + vz * vv + nz * plane;
     q_u[c] = du * w;
-    q_v[c] = side ? (1 - dv) * h : dv * h;
+    q_v[c] = dv * h;
     q_ao[c] = (ao >>> (c * 8)) & 255;
     const L = mk_light[base4 + c];
     const o = c * 4;
@@ -1109,10 +1117,10 @@ function meshCubes() {
  * @returns {void}
  */
 function setCrossPlane(ax, y0, az, bx, bz, tintA, tintB) {
-  q_x[0] = ax; q_y[0] = y0; q_z[0] = az; q_u[0] = 0; q_v[0] = 1; q_tint[0] = tintA;
-  q_x[1] = bx; q_y[1] = y0; q_z[1] = bz; q_u[1] = 1; q_v[1] = 1; q_tint[1] = tintB;
-  q_x[2] = bx; q_y[2] = y0 + 1; q_z[2] = bz; q_u[2] = 1; q_v[2] = 0; q_tint[2] = tintB;
-  q_x[3] = ax; q_y[3] = y0 + 1; q_z[3] = az; q_u[3] = 0; q_v[3] = 0; q_tint[3] = tintA;
+  q_x[0] = ax; q_y[0] = y0; q_z[0] = az; q_u[0] = 0; q_v[0] = 0; q_tint[0] = tintA;
+  q_x[1] = bx; q_y[1] = y0; q_z[1] = bz; q_u[1] = 1; q_v[1] = 0; q_tint[1] = tintB;
+  q_x[2] = bx; q_y[2] = y0 + 1; q_z[2] = bz; q_u[2] = 1; q_v[2] = 1; q_tint[2] = tintB;
+  q_x[3] = ax; q_y[3] = y0 + 1; q_z[3] = az; q_u[3] = 0; q_v[3] = 1; q_tint[3] = tintA;
 }
 
 /**
@@ -1300,7 +1308,7 @@ function emitFluid(id, x0, y0, z0, pi) {
       }
       q_y[c] = dv === 1 ? y0 + height : y0;
       q_u[c] = du;
-      q_v[c] = dv === 1 ? 1 - height : 1;
+      q_v[c] = dv === 1 ? 1 : 1 - height;
       q_ao[c] = 255;
       const o = c * 4;
       q_light[o] = s_light[o];
@@ -1446,7 +1454,7 @@ function emitBoxes(id, x0, y0, z0, pi) {
         q_y[c] = y0 + uy * uu + vy * vv + ny * plane;
         q_z[c] = z0 + uz * uu + vz * vv + nz * plane;
         q_u[c] = uu;
-        q_v[c] = side ? 1 - vv : vv;
+        q_v[c] = vv;
         q_tint[c] = tint;
 
         // Bilinear sample of the voxel-corner shading at the box's extents.
