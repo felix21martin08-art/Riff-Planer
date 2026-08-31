@@ -67,6 +67,7 @@ const env = {
     vec3.set(this.skyAmbient, amb * 0.55, amb * 0.72, amb * 1.15);
     vec3.set(this.fogColor, 0.10 + h * 0.5, 0.14 + h * 0.58, 0.22 + h * 0.68);
     vec3.set(this.biomeFogColor, this.fogColor[0], this.fogColor[1], this.fogColor[2]);
+    if (!this._fogLocked) this.fogDensity = 0.0016;
     this.aurora = h < 0.02; this.auroraIntensity = this.aurora ? 0.6 : 0;
   },
   isDay() { return this.sunDir[1] > 0; },
@@ -177,6 +178,25 @@ function loop(now) {
   }
   requestAnimationFrame(loop);
 }
+/* Live control surface for tools/capture.mjs: change the scene between shots
+   without paying the texture-generation and streaming cost again. */
+window.__probeApply = (cfg = {}) => {
+  if (cfg.time !== undefined) env.timeOfDay = cfg.time;
+  if (cfg.rain !== undefined) env.rainStrength = cfg.rain;
+  if (cfg.weather !== undefined) env.weather = cfg.weather;
+  if (cfg.fogDensity !== undefined) { env.fogDensity = cfg.fogDensity; env._fogLocked = true; }
+  if (cfg.yaw !== undefined) camera.yaw = cfg.yaw * Math.PI / 180;
+  if (cfg.pitch !== undefined) camera.pitch = cfg.pitch * Math.PI / 180;
+  if (cfg.fov !== undefined) camera.fov = cfg.fov;
+  if (cfg.pos) vec3.set(camera.position, cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+  if (cfg.dy !== undefined) camera.position[1] += cfg.dy;
+  if (cfg.setting) for (const [k, v] of Object.entries(cfg.setting)) settings.set(k, v);
+  env.update();
+  updateCamera();
+  P.applied = cfg;
+  return { camera: [...camera.position], time: env.timeOfDay, fog: env.fogDensity };
+};
+window.__probeStats = () => { try { return world.getStats(); } catch { return null; } };
 if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
 last = performance.now();
 requestAnimationFrame(loop);
