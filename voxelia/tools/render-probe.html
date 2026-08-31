@@ -116,19 +116,45 @@ try {
   P.stage = 'streaming';
 } catch (e) { fail('init', e); P.stage = 'init-failed'; }
 
+/* The world streams under a per-update time budget (3 ms of mesh upload per
+   call). Under a software rasteriser a frame can take 20 s, which would starve
+   streaming for minutes. So pump update() on its own before rendering starts. */
+const SETTLE_MS = num('settle', 45000);
+async function settle() {
+  P.stage = 'settling';
+  const until = performance.now() + SETTLE_MS;
+  let iterations = 0, idleRuns = 0;
+  while (performance.now() < until) {
+    for (let i = 0; i < 24; i++) {
+      try { world.update(1 / 60, camera.position, camera.frustum); } catch (e) { fail('settle', e); return; }
+      iterations++;
+    }
+    let st = null;
+    try { st = world.getStats(); } catch {}
+    if (st) {
+      P.chunks = st;
+      const idle = st.queued === 0 && st.meshing === 0 && st.generating === 0 && (st.lightQueue | 0) === 0;
+      if (idle && ++idleRuns >= 3) break;
+      if (!idle) idleRuns = 0;
+      if (!placed && world.isLoaded(0, 0)) {
+        const h = world.getHeight(0, 0);
+        if (Number.isFinite(h) && h > -60) {
+          vec3.set(camera.position, 8.5, Math.max(h + 2.6, 64), 8.5);
+          placed = true; updateCamera();
+        }
+      }
+    }
+    await new Promise(r => setTimeout(r, 0));
+  }
+  P.settleIterations = iterations;
+  P.stage = 'rendering';
+}
+
 let placed = false, last = performance.now(), acc = 0, frameMsSum = 0;
 function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
   frame.dt = dt; frame.time += dt; frame.frameIndex = P.frames;
   try {
-    // Once terrain around the origin exists, drop the camera onto the surface.
-    if (!placed && world.isLoaded(0, 0)) {
-      const h = world.getHeight(0, 0);
-      if (Number.isFinite(h) && h > -60) {
-        vec3.set(camera.position, 8.5, Math.max(h + 2.6, 64), 8.5);
-        placed = true; P.stage = 'rendering';
-      }
-    }
     if (num('orbit', 0)) camera.yaw += dt * 0.25;
     updateCamera();
     env.update();
@@ -145,12 +171,14 @@ function loop(now) {
     P.camera = [...camera.position].map(v => +v.toFixed(1));
     hud.textContent = `${P.stage}  frames=${P.frames} fps=${P.fps} frameMs=${P.avgFrameMs}\n`
       + `cam=${P.camera}  init=${P.initMs | 0}ms\n`
-      + (P.chunks ? `chunks loaded=${P.chunks.loaded} tris=${P.chunks.triangles ?? '?'}\n` : '')
+      + (P.chunks ? `chunks=${P.chunks.loaded} sections=${P.chunks.sections} tris=${P.chunks.triangles} queued=${P.chunks.queued} light=${P.chunks.lightQueue}\n` : '')
       + (P.errors.length ? `ERRORS ${P.errors.length}: ${P.errors[0].slice(0, 120)}` : 'no errors');
     acc = 0;
   }
   requestAnimationFrame(loop);
 }
+if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
+last = performance.now();
 requestAnimationFrame(loop);
 window.__voxReady = true;
 </script></body></html>

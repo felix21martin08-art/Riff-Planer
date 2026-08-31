@@ -71,17 +71,17 @@ const warnings = []
 const logs = []
 const failedRequests = []
 
+const allowed = u => ALLOW_404.some(a => String(u).includes(a))
 page.on('console', msg => {
   const t = msg.type()
   const text = msg.text()
   const loc = msg.location()
   const where = loc && loc.url ? ` (${loc.url.replace(base, '')}:${loc.lineNumber})` : ''
-  if (t === 'error') errors.push(text + where)
+  if (t === 'error') { if (!allowed(text) && !allowed(where)) errors.push(text + where) }
   else if (t === 'warning') warnings.push(text + where)
   else logs.push(`[${t}] ${text}`)
 })
 page.on('pageerror', e => errors.push('PAGEERROR: ' + (e.stack || e.message)))
-const allowed = u => ALLOW_404.some(a => u.includes(a))
 page.on('requestfailed', r => {
   const u = r.url().replace(base, '')
   if (!allowed(u)) failedRequests.push(`${r.method()} ${u} :: ${r.failure()?.errorText}`)
@@ -176,6 +176,7 @@ const probe = await page.evaluate(() => {
       avgFrameMs: window.__probe.avgFrameMs, initMs: Math.round(window.__probe.initMs || 0),
       camera: window.__probe.camera, chunks: window.__probe.chunks,
       errors: window.__probe.errors.slice(0, 8),
+      settleIterations: window.__probe.settleIterations,
     } : null,
     hasGame: !!g,
     state: g && g.state,
