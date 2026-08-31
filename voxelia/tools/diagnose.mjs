@@ -80,6 +80,26 @@ console.log('opening the inventory …')
 await page.keyboard.press('KeyE')
 for (let i = 0; i < 3; i++) { await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {}); await page.waitForTimeout(1200) }
 const inv = await page.evaluate(() => {
+  /** Walk the inventory subtree and report why it is (not) visible. */
+  const dump = (el, depth = 0, out = []) => {
+    if (!el || depth > 3) return out
+    const cs = getComputedStyle(el)
+    const r = el.getBoundingClientRect()
+    out.push({
+      d: depth, tag: el.tagName.toLowerCase(), cls: (el.className || '').toString().slice(0, 48),
+      display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
+      z: cs.zIndex, transform: cs.transform === 'none' ? 'none' : 'set',
+      rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+      children: el.children.length,
+    })
+    for (const c of [...el.children].slice(0, 4)) dump(c, depth + 1, out)
+    return out
+  }
+  window.__invDump = (() => {
+    const layer = document.querySelector('.vx-containers')
+    return layer ? dump(layer) : null
+  })()
+  return (() => {
   const root = document.getElementById('ui')
   const all = [...document.querySelectorAll('*')]
   const invish = all.filter(e => typeof e.className === 'string' && /invent/i.test(e.className))
@@ -91,7 +111,13 @@ const inv = await page.evaluate(() => {
     inventoryNodes: invish.length,
     inventoryVisible: visible.length,
     gameKeys: Object.keys(window.game).filter(k => /ui|hud|screen|invent|overlay/i.test(k)),
+    cssVars: (() => {
+      const cs = getComputedStyle(document.documentElement)
+      return ['--z-container', '--gui-scale', '--cell'].map(v => v + '=' + (cs.getPropertyValue(v).trim() || 'UNDEFINED')).join(' ')
+    })(),
+    subtree: window.__invDump,
   }
+})()
 })
 console.log('INVENTORY', JSON.stringify(inv, null, 1))
 
