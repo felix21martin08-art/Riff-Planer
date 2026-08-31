@@ -176,7 +176,19 @@ function loop(now) {
       + (P.errors.length ? `ERRORS ${P.errors.length}: ${P.errors[0].slice(0, 120)}` : 'no errors');
     acc = 0;
   }
-  requestAnimationFrame(loop);
+  schedule();
+}
+
+/* Headless Chromium throttles requestAnimationFrame when no compositor frame is
+   being demanded, which stalls the loop between screenshots. Prefer rAF, but
+   fall back to a timer if it does not fire, so frames keep advancing headless. */
+let rafId = 0, fallbackId = 0;
+function schedule() {
+  cancelAnimationFrame(rafId);
+  clearTimeout(fallbackId);
+  let fired = false;
+  rafId = requestAnimationFrame((t) => { fired = true; clearTimeout(fallbackId); loop(t); });
+  fallbackId = setTimeout(() => { if (!fired) { cancelAnimationFrame(rafId); loop(performance.now()); } }, 250);
 }
 /* Live control surface for tools/capture.mjs: change the scene between shots
    without paying the texture-generation and streaming cost again. */
@@ -199,6 +211,6 @@ window.__probeApply = (cfg = {}) => {
 window.__probeStats = () => { try { return world.getStats(); } catch { return null; } };
 if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
 last = performance.now();
-requestAnimationFrame(loop);
+schedule();
 window.__voxReady = true;
 </script></body></html>
