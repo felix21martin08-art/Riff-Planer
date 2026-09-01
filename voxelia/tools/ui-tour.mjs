@@ -31,15 +31,44 @@ const msgs = []
 page.on('pageerror', e => msgs.push('PAGEERROR ' + e.message.slice(0, 200)))
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') msgs.push(m.type().toUpperCase() + ' ' + m.text().slice(0, 200)) })
 
-/** Force n compositor frames, then screenshot. */
-async function settleShot(name, note, frames = 5) {
-  for (let i = 0; i < frames; i++) {
-    await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
-    await page.waitForTimeout(900)
+/**
+ * Read the WebGL canvas back and report how varied it is. A uniform frame means
+ * nothing has been rendered yet — which is indistinguishable from a broken
+ * screen unless it is measured.
+ */
+const frameVariety = () => page.evaluate(() => {
+  const c = document.querySelector('canvas')
+  const gl = c && c.getContext('webgl2')
+  if (!gl) return -1
+  const w = 24, h = 14
+  const buf = new Uint8Array(w * h * 4)
+  const seen = new Set()
+  try {
+    gl.readPixels((c.width - w) >> 1, (c.height - h) >> 1, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf)
+  } catch { return -1 }
+  for (let i = 0; i < buf.length; i += 4) seen.add((buf[i] << 16) | (buf[i + 1] << 8) | buf[i + 2])
+  return seen.size
+})
+
+/**
+ * Force compositor frames until the canvas actually contains an image, then
+ * screenshot. Never reports success on a frame it could not prove was rendered.
+ */
+async function settleShot(name, note, frames = 5, maxRounds = 6) {
+  let distinct = 0
+  for (let round = 0; round < maxRounds; round++) {
+    for (let i = 0; i < frames; i++) {
+      await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
+      await page.waitForTimeout(900)
+    }
+    distinct = await frameVariety()
+    if (distinct > 1) break
   }
+  if (distinct <= 1) console.log(`  ${name.padEnd(16)} BLANK canvas stayed uniform (distinct=${distinct})`)
   try {
     await page.screenshot({ path: path.join(OUT, name + '.png'), timeout: 300000 })
-    console.log(`  ${name.padEnd(16)} ok    ${note}`)
+    const kb = (fs.statSync(path.join(OUT, name + '.png')).size / 1024) | 0
+    console.log(`  ${name.padEnd(16)} ok  ${String(kb).padStart(4)} KB  distinct=${distinct}  ${note}`)
   } catch (e) { console.log(`  ${name.padEnd(16)} FAIL  ${e.message.split('\n')[0]}`) }
 }
 
