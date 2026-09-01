@@ -1410,15 +1410,28 @@ export class ParticleSystem {
     else if (nz < -0.5) face = 5;
 
     const count = Math.max(1, Math.round((2 + rng() * 4) * this._spawnScale));
-    const px = x + 0.5 + nx * 0.53;
-    const py = y + 0.5 + ny * 0.53;
-    const pz = z + 0.5 + nz * 0.53;
+    // The chips belong *on* the face being hit, so the cloud is centred 0.10
+    // outside it and the 0.10 spread keeps every chip in the 0..0.20 shell
+    // in front of the surface: none of them lands back inside the block (which
+    // is still solid while it is being mined, so the voxel collision would snap
+    // it to the block's underside and settle it there) and none of them starts
+    // out in the open space between the block and the player.
+    //
+    // The velocity is a nudge that frees the chip from the face, *not* a shot
+    // along the outward normal — which points at whoever is mining. Firing them
+    // at 1.6 m/s from a point already 0.53 outside the face carried chips to
+    // within 0.07 blocks of the eye, where one 0.1-block billboard covers most
+    // of the frame and the near-plane fade makes it a translucent pane of
+    // magnified block texture instead of a chip.
+    const px = x + 0.5 + nx * 0.60;
+    const py = y + 0.5 + ny * 0.60;
+    const pz = z + 0.5 + nz * 0.60;
     return this._emit(P.BREAK, px, py, pz, count, {
       blockId,
       face,
-      spread: 0.22,
-      speed: 1.3,
-      velocity: [nx * 1.6, ny * 1.6 + 0.9, nz * 1.6],
+      spread: 0.10,
+      speed: 0.5,
+      velocity: [nx * 0.2, ny * 0.2, nz * 0.2],
       life: 0.7,
       size: 0.085,
     });

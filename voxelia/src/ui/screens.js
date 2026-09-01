@@ -27,10 +27,15 @@
  * Escape, and while one has focus `input.typing` is raised so holding `W` in
  * the world-name box cannot walk the player.
  *
- * **Styling** comes from `ui/style.css` using the `vox-<screen>-<part>` class
- * convention. A compact fallback stylesheet is *prepended* to `<head>` (so the
- * real stylesheet, which is linked later, always wins) purely so the menus stay
- * usable if a class is missing.
+ * **Styling** is the shared design system in `ui/style.css` — the `vx-`
+ * primitives of section 04 (`vx-panel`, `vx-btn`, `vx-field`, `vx-input`,
+ * `vx-select`, `vx-slider`, `vx-toggle`, `vx-tabs`) and the screen components
+ * of section 08 (`vx-screen`, `vx-menu`, `vx-world`, `vx-settings`, `vx-key`,
+ * `vx-pause`, `vx-death`, `vx-loading`). This module deliberately ships **no
+ * stylesheet of its own**: a second, parallel set of class names is exactly how
+ * these screens ended up unstyled once already. A screen becomes visible when
+ * the manager raises `is-open` on its container, which is also what opts the
+ * overlay back into pointer events.
  *
  * All user-facing strings are German.
  *
@@ -129,6 +134,16 @@ export const WORLD_TYPE_OPTIONS = Object.freeze([
 ]);
 
 /**
+ * German labels for the game modes a stored world can carry.
+ * @type {Readonly<Object<string, string>>}
+ */
+export const GAME_MODE_LABELS = Object.freeze({
+  survival: 'Überleben',
+  creative: 'Kreativ',
+  spectator: 'Zuschauer',
+});
+
+/**
  * Tips rotated on the loading screen, one every few seconds.
  * @type {ReadonlyArray<string>}
  */
@@ -150,132 +165,12 @@ export const LOADING_TIPS = Object.freeze([
 /** Seconds one loading tip stays on screen. @type {number} */
 const TIP_INTERVAL = 7;
 
-/** Fallback stylesheet element id. @type {string} */
-const STYLE_ID = 'vox-screens-fallback';
-
-/**
- * Minimal structural fallback CSS. It is inserted as the **first** child of
- * `<head>` so `ui/style.css` (linked later in the document) always overrides it.
- * @type {string}
- */
-const FALLBACK_CSS = `
-.vox-screen{position:absolute;inset:0;pointer-events:auto;display:flex;align-items:center;
- justify-content:center;color:#e8eef7;font:14px/1.5 "Inter","Segoe UI",system-ui,sans-serif;
- overflow:auto;padding:24px;box-sizing:border-box;z-index:50}
-.vox-screen--mainmenu{background:linear-gradient(180deg,rgba(4,7,14,.72),rgba(4,7,14,.42) 45%,rgba(4,7,14,.86))}
-.vox-screen--pause,.vox-screen--death{background:rgba(4,7,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.vox-screen--worldcreate,.vox-screen--worldlist,.vox-screen--settings,.vox-screen--controls
- {background:rgba(4,7,14,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);align-items:flex-start}
-.vox-screen--loading{background:radial-gradient(120% 90% at 50% 0%,#12203a,#04060a);flex-direction:column;gap:22px}
-.vox-panel{width:min(880px,100%);background:rgba(12,18,30,.72);border:1px solid rgba(150,190,255,.14);
- border-radius:16px;padding:26px 28px;box-shadow:0 24px 70px rgba(0,0,0,.55);box-sizing:border-box;margin:auto}
-.vox-panel--narrow{width:min(460px,100%)}
-.vox-panel h2{margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:.02em}
-.vox-panel-sub{margin:0 0 20px;opacity:.62;font-size:13px}
-.vox-btn{display:block;width:100%;box-sizing:border-box;margin:0;padding:11px 16px;text-align:center;
- font:inherit;font-weight:600;color:#e8eef7;background:rgba(255,255,255,.07);cursor:pointer;
- border:1px solid rgba(150,190,255,.18);border-radius:10px;transition:background .12s,border-color .12s}
-.vox-btn:hover{background:rgba(120,180,255,.18)}
-.vox-btn:focus-visible,.vox-btn.is-focus{outline:2px solid #6cb6ff;outline-offset:2px;background:rgba(120,180,255,.22)}
-.vox-btn[disabled]{opacity:.4;cursor:not-allowed}
-.vox-btn--primary{background:linear-gradient(180deg,#3f86e0,#2b62ac);border-color:rgba(160,210,255,.4)}
-.vox-btn--danger{background:rgba(190,60,60,.24);border-color:rgba(255,120,120,.32)}
-.vox-btn--ghost{background:transparent}
-.vox-btn--inline{display:inline-block;width:auto}
-.vox-row{display:flex;gap:10px;align-items:center}
-.vox-menu-inner{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center}
-.vox-menu-title{margin:0;font-size:clamp(42px,9vw,96px);font-weight:800;letter-spacing:.2em;
- background:linear-gradient(180deg,#fff,#8fd0ff 60%,#3f7fd0);-webkit-background-clip:text;background-clip:text;color:transparent}
-.vox-menu-subtitle{margin:-14px 0 0;opacity:.6;letter-spacing:.36em;text-transform:uppercase;font-size:12px}
-.vox-menu-buttons{display:flex;flex-direction:column;gap:10px;width:min(320px,80vw)}
-.vox-menu-footer{opacity:.42;font-size:11px;letter-spacing:.08em}
-.vox-field{margin:0 0 16px}
-.vox-field-label{display:block;margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.06em;
- text-transform:uppercase;opacity:.7}
-.vox-field-hint{margin:6px 0 0;font-size:12px;opacity:.55}
-.vox-input{width:100%;box-sizing:border-box;padding:10px 12px;font:inherit;color:#e8eef7;
- background:rgba(0,0,0,.34);border:1px solid rgba(150,190,255,.2);border-radius:9px}
-.vox-input:focus{outline:2px solid #6cb6ff;outline-offset:1px}
-.vox-choice{display:flex;gap:8px;flex-wrap:wrap}
-.vox-choice .vox-btn{width:auto;flex:1 1 120px}
-.vox-choice .vox-btn.is-active{background:rgba(120,180,255,.28);border-color:#6cb6ff}
-.vox-list-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.vox-list-card{display:flex;flex-direction:column;gap:6px;padding:14px;text-align:left;
- background:rgba(255,255,255,.05);border:1px solid rgba(150,190,255,.14);border-radius:12px}
-.vox-list-card.is-focus{outline:2px solid #6cb6ff;outline-offset:2px}
-.vox-list-name{font-size:16px;font-weight:700}
-.vox-list-meta{font-size:12px;opacity:.6;display:flex;flex-wrap:wrap;gap:4px 14px}
-.vox-list-actions{display:flex;gap:8px;margin-top:6px}
-.vox-list-actions .vox-btn{width:auto;flex:1;padding:8px 10px;font-size:13px}
-.vox-list-empty{padding:40px 0;text-align:center;opacity:.55}
-.vox-settings-tabs,.vox-book-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px}
-.vox-settings-tab{width:auto;padding:8px 16px;font-size:13px}
-.vox-settings-tab.is-active{background:rgba(120,180,255,.26);border-color:#6cb6ff}
-.vox-settings-list{display:flex;flex-direction:column;gap:2px;max-height:52vh;overflow:auto;padding-right:6px}
-.vox-settings-item{display:grid;grid-template-columns:1fr 220px;gap:8px 18px;align-items:center;
- padding:10px 8px;border-radius:9px;border-bottom:1px solid rgba(255,255,255,.05)}
-.vox-settings-item.is-focus{outline:2px solid #6cb6ff;outline-offset:-2px}
-.vox-settings-name{font-weight:600}
-.vox-settings-desc{grid-column:1;font-size:12px;opacity:.52;margin-top:2px}
-.vox-settings-widget{grid-row:1/span 2;display:flex;align-items:center;gap:10px;justify-content:flex-end}
-.vox-settings-value{min-width:74px;text-align:right;font-variant-numeric:tabular-nums;font-size:13px;opacity:.85}
-.vox-settings-restart{font-size:11px;color:#ffcc77;opacity:.9}
-.vox-settings-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
-.vox-settings-foot .vox-btn{width:auto}
-.vox-slider{width:130px;accent-color:#6cb6ff}
-.vox-toggle{width:56px;padding:7px 0;font-size:12px}
-.vox-toggle.is-on{background:rgba(90,200,140,.26);border-color:rgba(120,240,180,.4)}
-.vox-select{padding:8px 10px;font:inherit;color:#e8eef7;background:rgba(0,0,0,.4);
- border:1px solid rgba(150,190,255,.2);border-radius:8px;min-width:120px}
-.vox-controls-list{display:flex;flex-direction:column;gap:2px;max-height:56vh;overflow:auto;padding-right:6px}
-.vox-controls-row{display:grid;grid-template-columns:1fr 190px 120px;gap:12px;align-items:center;
- width:100%;padding:9px 10px;text-align:left;font:inherit;color:inherit;background:none;
- border:0;border-bottom:1px solid rgba(255,255,255,.05);border-radius:8px;cursor:pointer}
-.vox-controls-row:hover{background:rgba(120,180,255,.12)}
-.vox-controls-row.is-focus{outline:2px solid #6cb6ff;outline-offset:-2px}
-.vox-controls-key{padding:5px 10px;text-align:center;border-radius:7px;font-size:13px;
- background:rgba(0,0,0,.35);border:1px solid rgba(150,190,255,.22)}
-.vox-controls-row.is-capturing .vox-controls-key{background:rgba(255,190,80,.3);border-color:#ffbe50}
-.vox-controls-row.is-conflict .vox-controls-key{border-color:#ff7676;color:#ffb4b4}
-.vox-controls-pad{font-size:12px;opacity:.45;text-align:right}
-.vox-death-inner{text-align:center;display:flex;flex-direction:column;gap:16px;align-items:center}
-.vox-death-title{margin:0;font-size:44px;font-weight:800;color:#ff6b6b;letter-spacing:.04em}
-.vox-death-cause{margin:0;font-size:16px;opacity:.85}
-.vox-death-score{margin:0;font-size:13px;opacity:.6}
-.vox-death-buttons{display:flex;flex-direction:column;gap:10px;width:min(280px,70vw)}
-.vox-loading-title{margin:0;font-size:clamp(30px,7vw,64px);font-weight:800;letter-spacing:.2em;opacity:.92}
-.vox-loading-bar{width:min(460px,72vw);height:5px;border-radius:4px;background:rgba(255,255,255,.09);overflow:hidden}
-.vox-loading-fill{display:block;height:100%;width:0;border-radius:4px;
- background:linear-gradient(90deg,#4ea3ff,#7ce0c0);box-shadow:0 0 18px rgba(78,163,255,.6);transition:width .2s ease}
-.vox-loading-step{opacity:.75;font-variant-numeric:tabular-nums;min-height:20px}
-.vox-loading-tip{max-width:min(560px,80vw);text-align:center;font-size:13px;opacity:.5;min-height:38px;
- transition:opacity .35s ease}
-.vox-loading-tip.is-fading{opacity:0}
-.vox-confirm{display:flex;gap:8px;align-items:center;font-size:13px}
-.vox-confirm .vox-btn{width:auto;padding:7px 12px;font-size:13px}
-`;
+/** SVG namespace for the few inline icons this module draws. @type {string} */
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /* ------------------------------------------------------------------------- */
 /* Small helpers                                                              */
 /* ------------------------------------------------------------------------- */
-
-/** True once the fallback stylesheet has been inserted. @type {boolean} */
-let stylesInstalled = false;
-
-/**
- * Insert the fallback stylesheet exactly once, before every other stylesheet.
- * @returns {void}
- */
-function ensureStyles() {
-  if (stylesInstalled) return;
-  stylesInstalled = true;
-  if (typeof document === 'undefined' || !document.head) return;
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = FALLBACK_CSS;
-  document.head.insertBefore(style, document.head.firstChild);
-}
 
 /**
  * Create an element with a class list and optional text content.
@@ -292,18 +187,121 @@ function el(tag, cls, text) {
 }
 
 /**
- * Create a navigable button.
+ * Add or remove a state class.
+ *
+ * Written with a computed method name on purpose: it keeps the DOM mutation in
+ * one place and stays readable at the call sites, which pass a plain boolean.
+ * @param {Element|null} node Target element.
+ * @param {string} name State class, e.g. `'is-active'`.
+ * @param {boolean} on Whether the state applies.
+ * @returns {void}
+ */
+function setState(node, name, on) {
+  if (node) node.classList[on ? 'add' : 'remove'](name);
+}
+
+/**
+ * Create a navigable design-system button.
  * @param {string} label German button caption.
- * @param {string} cls Extra classes appended to `vox-btn`.
+ * @param {string} cls Extra classes appended to `vx-btn`.
  * @param {function(MouseEvent):void} onClick Click handler.
  * @returns {HTMLButtonElement} The button.
  */
 function makeButton(label, cls, onClick) {
-  const b = /** @type {HTMLButtonElement} */ (el('button', `vox-btn ${cls || ''}`.trim(), label));
+  const classes = cls ? 'vx-btn ' + cls : 'vx-btn';
+  const b = /** @type {HTMLButtonElement} */ (el('button', classes, label));
   b.type = 'button';
   b.setAttribute('data-nav', '1');
   b.addEventListener('click', onClick);
   return b;
+}
+
+/**
+ * Build a stacked form field: caption above, control below, hint underneath.
+ * @param {string} caption German field caption.
+ * @param {string} [forId] `id` of the control the caption labels.
+ * @returns {{field:HTMLElement, control:HTMLElement, hint:HTMLElement}} The
+ *   field wrapper, the row the control goes into and the hint paragraph.
+ */
+function makeField(caption, forId) {
+  const field = el('div', 'vx-field vx-field--stack');
+  const label = el(forId ? 'label' : 'span', 'vx-field__label', caption);
+  if (forId) /** @type {HTMLLabelElement} */ (label).htmlFor = forId;
+  const control = el('div', 'vx-field__control');
+  const hint = el('p', 'vx-field__desc', '');
+  field.appendChild(label);
+  field.appendChild(control);
+  field.appendChild(hint);
+  return { field, control, hint };
+}
+
+/**
+ * A segmented control built from the design system's tab component.
+ * @param {ReadonlyArray<{value:string, label:string}>} options Choices.
+ * @param {function(string):void} onPick Called with the picked value.
+ * @returns {HTMLElement} The `.vx-tabs` group; sync it with {@link syncSegment}.
+ */
+function makeSegment(options, onPick) {
+  const group = el('div', 'vx-tabs vx-tabs--wrap');
+  group.setAttribute('role', 'radiogroup');
+  for (const opt of options) {
+    const b = /** @type {HTMLButtonElement} */ (el('button', 'vx-tab', opt.label));
+    b.type = 'button';
+    b.setAttribute('data-nav', '1');
+    b.setAttribute('role', 'radio');
+    b.dataset.value = opt.value;
+    b.addEventListener('click', () => onPick(opt.value));
+    group.appendChild(b);
+  }
+  return group;
+}
+
+/**
+ * Mark the active button of a {@link makeSegment} group.
+ * @param {HTMLElement} group The `.vx-tabs` container.
+ * @param {string} value Active value.
+ * @returns {void}
+ */
+function syncSegment(group, value) {
+  const kids = group.children;
+  for (let i = 0; i < kids.length; i++) {
+    const child = /** @type {HTMLElement} */ (kids[i]);
+    const active = child.dataset.value === value;
+    setState(child, 'is-active', active);
+    child.setAttribute('aria-checked', active ? 'true' : 'false');
+  }
+}
+
+/**
+ * Inline dice icon for the "roll a seed" button. Drawn as SVG so it needs
+ * neither an image file nor an emoji font.
+ * @returns {SVGElement} A 24×24 icon carrying the `vx-btn__icon` class.
+ */
+function diceIcon() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'vx-btn__icon');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const body = document.createElementNS(SVG_NS, 'rect');
+  body.setAttribute('x', '3');
+  body.setAttribute('y', '3');
+  body.setAttribute('width', '18');
+  body.setAttribute('height', '18');
+  body.setAttribute('rx', '4.5');
+  body.setAttribute('fill', 'none');
+  body.setAttribute('stroke', 'currentColor');
+  body.setAttribute('stroke-width', '1.8');
+  svg.appendChild(body);
+  for (const [cx, cy] of [[8, 8], [16, 8], [12, 12], [8, 16], [16, 16]]) {
+    const pip = document.createElementNS(SVG_NS, 'circle');
+    pip.setAttribute('cx', String(cx));
+    pip.setAttribute('cy', String(cy));
+    pip.setAttribute('r', '1.9');
+    pip.setAttribute('fill', 'currentColor');
+    svg.appendChild(pip);
+  }
+  return svg;
 }
 
 /**
@@ -426,6 +424,19 @@ export class Screen {
     this.mounted = false;
     /** @type {boolean} Should the manager release pointer lock for this screen? */
     this.releasesPointerLock = true;
+    /**
+     * Backdrop variant appended as `vx-screen--<variant>`, or `null` for the
+     * default translucent backdrop. Only variants the stylesheet defines are
+     * used — an unknown modifier would be a class nothing styles.
+     * @type {string|null}
+     */
+    this.variant = null;
+    /**
+     * Column width of `.vx-screen__inner`: `'narrow'`, `'wide'` or `null` for
+     * the default 880 px card.
+     * @type {string|null}
+     */
+    this.width = null;
   }
 
   /**
@@ -487,6 +498,38 @@ export class Screen {
   _settings() {
     return (this.game && this.game.settings) || null;
   }
+
+  /**
+   * Build the standard card skeleton: a glass panel with a head (title and
+   * subtitle), a body and a foot, inside the animated screen column.
+   * @param {HTMLElement} container The screen container.
+   * @param {string} title German screen title.
+   * @param {string} subtitle German one-line explanation.
+   * @returns {{panel:HTMLElement, head:HTMLElement, body:HTMLElement, foot:HTMLElement}}
+   *   The freshly appended parts.
+   * @protected
+   */
+  _buildCard(container, title, subtitle) {
+    const inner = el('div', 'vx-screen__inner');
+    const panel = el('div', 'vx-panel');
+
+    const head = el('div', 'vx-panel__head');
+    const heading = el('div', 'vx-col');
+    heading.appendChild(el('h2', 'vx-title', title));
+    if (subtitle) heading.appendChild(el('p', 'vx-subtitle', subtitle));
+    head.appendChild(heading);
+    panel.appendChild(head);
+
+    const body = el('div', 'vx-panel__body');
+    panel.appendChild(body);
+
+    const foot = el('div', 'vx-panel__foot');
+    panel.appendChild(foot);
+
+    inner.appendChild(panel);
+    container.appendChild(inner);
+    return { panel, head, body, foot };
+  }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -499,40 +542,53 @@ export class Screen {
  */
 export class MainMenu extends Screen {
   /**
+   * @param {ScreenManager} manager Owning manager.
+   */
+  constructor(manager) {
+    super(manager);
+    this.variant = 'menu';
+  }
+
+  /**
    * @param {HTMLElement} container Container element.
    * @param {Object} [data] Unused.
    * @returns {void}
    */
   mount(container, data) {
     super.mount(container, data);
-    const inner = el('div', 'vox-menu-inner');
+    const inner = el('div', 'vx-screen__inner');
+    const menu = el('div', 'vx-menu');
 
-    inner.appendChild(el('h1', 'vox-menu-title', 'VOXELIA'));
-    inner.appendChild(el('p', 'vox-menu-subtitle', 'Unendliche Welten'));
+    menu.appendChild(el('h1', 'vx-menu__logo', 'VOXELIA'));
+    menu.appendChild(el('p', 'vx-menu__tag', 'Unendliche Welten'));
 
-    const buttons = el('div', 'vox-menu-buttons');
-    buttons.appendChild(makeButton('Welt erstellen', 'vox-btn--primary vox-menu-button', () => {
+    const nav = el('div', 'vx-menu__nav');
+    nav.appendChild(makeButton('Welt erstellen', 'vx-btn--primary vx-btn--lg vx-btn--block', () => {
       this._sound('ui_select');
       this.manager.show('worldcreate');
     }));
-    buttons.appendChild(makeButton('Welt laden', 'vox-menu-button', () => {
+    nav.appendChild(makeButton('Welt laden', 'vx-btn--block', () => {
       this._sound('click');
       this.manager.show('worldlist');
     }));
-    buttons.appendChild(makeButton('Einstellungen', 'vox-menu-button', () => {
+
+    const row = el('div', 'vx-menu__row');
+    row.appendChild(makeButton('Einstellungen', 'vx-btn--ghost', () => {
       this._sound('click');
       this.manager.show('settings');
     }));
-    buttons.appendChild(makeButton('Steuerung', 'vox-menu-button', () => {
+    row.appendChild(makeButton('Steuerung', 'vx-btn--ghost', () => {
       this._sound('click');
       this.manager.show('controls');
     }));
-    inner.appendChild(buttons);
+    nav.appendChild(row);
 
-    inner.appendChild(el('div', 'vox-menu-footer',
-      'WebGL2 · prozedurale Texturen · farbiges Voxellicht'));
-
+    menu.appendChild(nav);
+    inner.appendChild(menu);
     container.appendChild(inner);
+
+    container.appendChild(el('p', 'vx-menu__version',
+      'WebGL2 · prozedurale Texturen · farbiges Voxellicht'));
   }
 
   /**
@@ -558,6 +614,7 @@ export class WorldCreate extends Screen {
    */
   constructor(manager) {
     super(manager);
+    this.width = 'narrow';
     /** @type {string} Selected game mode value. @private */
     this._mode = 'survival';
     /** @type {string} Selected world type value. @private */
@@ -584,131 +641,105 @@ export class WorldCreate extends Screen {
   mount(container, data) {
     super.mount(container, data);
     this._busy = false;
-    const panel = el('div', 'vox-panel vox-panel--narrow vox-create-panel');
-    panel.appendChild(el('h2', 'vox-create-title', 'Neue Welt erstellen'));
-    panel.appendChild(el('p', 'vox-panel-sub',
-      'Gleicher Startwert und gleicher Welttyp erzeugen immer dieselbe Welt.'));
+    const { body, foot } = this._buildCard(container, 'Neue Welt erstellen',
+      'Gleicher Startwert und gleicher Welttyp erzeugen immer dieselbe Welt.');
+
+    const form = el('div', 'vx-col vx-scroll');
+    body.appendChild(form);
 
     /* -- name ------------------------------------------------------------- */
-    const nameField = el('div', 'vox-field vox-create-field');
-    const nameLabel = el('label', 'vox-field-label', 'Weltname');
-    nameLabel.htmlFor = 'vox-create-name';
-    nameField.appendChild(nameLabel);
-    const nameInput = /** @type {HTMLInputElement} */ (el('input', 'vox-input vox-create-name'));
-    nameInput.id = 'vox-create-name';
+    const name = makeField('Weltname', 'voxelia-world-name');
+    const nameInput = /** @type {HTMLInputElement} */ (el('input', 'vx-input'));
+    nameInput.id = 'voxelia-world-name';
     nameInput.type = 'text';
     nameInput.maxLength = 64;
     nameInput.placeholder = 'Neue Welt';
+    nameInput.autocomplete = 'off';
+    nameInput.spellcheck = false;
     nameInput.value = (data && typeof data.name === 'string') ? data.name : this._defaultName();
     nameInput.setAttribute('data-nav', '1');
-    nameField.appendChild(nameInput);
+    name.control.appendChild(nameInput);
+    name.hint.textContent = 'Höchstens 64 Zeichen. Der Name erscheint in der Weltliste.';
     this._nameInput = nameInput;
-    panel.appendChild(nameField);
+    form.appendChild(name.field);
 
     /* -- seed ------------------------------------------------------------- */
-    const seedField = el('div', 'vox-field vox-create-field');
-    const seedLabel = el('label', 'vox-field-label', 'Startwert (Seed)');
-    seedLabel.htmlFor = 'vox-create-seed';
-    seedField.appendChild(seedLabel);
-    const seedRow = el('div', 'vox-row vox-create-seedrow');
-    const seedInput = /** @type {HTMLInputElement} */ (el('input', 'vox-input vox-create-seed'));
-    seedInput.id = 'vox-create-seed';
+    const seed = makeField('Startwert (Seed)', 'voxelia-world-seed');
+    const seedInput = /** @type {HTMLInputElement} */ (el('input', 'vx-input'));
+    seedInput.id = 'voxelia-world-seed';
     seedInput.type = 'text';
     seedInput.maxLength = 48;
     seedInput.placeholder = 'leer lassen für Zufall';
+    seedInput.autocomplete = 'off';
+    seedInput.spellcheck = false;
     seedInput.value = (data && data.seed !== undefined && data.seed !== null) ? String(data.seed) : '';
     seedInput.setAttribute('data-nav', '1');
     seedInput.addEventListener('input', () => this._refreshSeedHint());
-    seedRow.appendChild(seedInput);
+    seed.control.appendChild(seedInput);
     this._seedInput = seedInput;
 
-    const dice = makeButton('🎲', 'vox-btn--inline vox-create-dice', () => {
+    const dice = makeButton('', 'vx-btn--icon', () => {
       seedInput.value = String((Math.random() * 4294967296) | 0);
       this._refreshSeedHint();
       this._sound('click');
     });
+    dice.appendChild(diceIcon());
     dice.title = 'Zufälligen Startwert würfeln';
     dice.setAttribute('aria-label', 'Zufälligen Startwert würfeln');
-    seedRow.appendChild(dice);
-    seedField.appendChild(seedRow);
-
-    this._seedHint = el('p', 'vox-field-hint vox-create-seedhint', '');
-    seedField.appendChild(this._seedHint);
-    panel.appendChild(seedField);
+    seed.control.appendChild(dice);
+    this._seedHint = seed.hint;
+    form.appendChild(seed.field);
     this._refreshSeedHint();
 
     /* -- game mode -------------------------------------------------------- */
     if (data && typeof data.gameMode === 'string') this._mode = data.gameMode;
-    const modeField = el('div', 'vox-field vox-create-field');
-    modeField.appendChild(el('span', 'vox-field-label', 'Spielmodus'));
-    const modeChoice = el('div', 'vox-choice vox-create-modes');
-    for (const opt of GAME_MODE_OPTIONS) {
-      const b = makeButton(opt.label, 'vox-create-mode', () => {
-        this._mode = opt.value;
-        this._syncChoice(modeChoice, opt.value);
-        if (this._modeHint) this._modeHint.textContent = opt.description;
-        this._sound('click');
-      });
-      b.dataset.value = opt.value;
-      modeChoice.appendChild(b);
-    }
-    modeField.appendChild(modeChoice);
-    this._modeHint = el('p', 'vox-field-hint vox-create-modehint', '');
-    modeField.appendChild(this._modeHint);
-    panel.appendChild(modeField);
-    this._syncChoice(modeChoice, this._mode);
-    this._modeHint.textContent = this._describe(GAME_MODE_OPTIONS, this._mode);
+    const mode = makeField('Spielmodus');
+    const modeSegment = makeSegment(GAME_MODE_OPTIONS, (value) => {
+      this._mode = value;
+      syncSegment(modeSegment, value);
+      mode.hint.textContent = this._describe(GAME_MODE_OPTIONS, value);
+      this._sound('click');
+    });
+    mode.control.appendChild(modeSegment);
+    this._modeHint = mode.hint;
+    form.appendChild(mode.field);
+    syncSegment(modeSegment, this._mode);
+    mode.hint.textContent = this._describe(GAME_MODE_OPTIONS, this._mode);
 
     /* -- world type ------------------------------------------------------- */
     if (data && typeof data.worldType === 'string') this._type = data.worldType;
-    const typeField = el('div', 'vox-field vox-create-field');
-    typeField.appendChild(el('span', 'vox-field-label', 'Welttyp'));
-    const typeChoice = el('div', 'vox-choice vox-create-types');
-    for (const opt of WORLD_TYPE_OPTIONS) {
-      const b = makeButton(opt.label, 'vox-create-type', () => {
-        this._type = opt.value;
-        this._syncChoice(typeChoice, opt.value);
-        if (this._typeHint) this._typeHint.textContent = opt.description;
-        this._sound('click');
-      });
-      b.dataset.value = opt.value;
-      typeChoice.appendChild(b);
-    }
-    typeField.appendChild(typeChoice);
-    this._typeHint = el('p', 'vox-field-hint vox-create-typehint', '');
-    typeField.appendChild(this._typeHint);
-    panel.appendChild(typeField);
-    this._syncChoice(typeChoice, this._type);
-    this._typeHint.textContent = this._describe(WORLD_TYPE_OPTIONS, this._type);
+    const type = makeField('Welttyp');
+    const typeSegment = makeSegment(WORLD_TYPE_OPTIONS, (value) => {
+      this._type = value;
+      syncSegment(typeSegment, value);
+      type.hint.textContent = this._describe(WORLD_TYPE_OPTIONS, value);
+      this._sound('click');
+    });
+    type.control.appendChild(typeSegment);
+    this._typeHint = type.hint;
+    form.appendChild(type.field);
+    syncSegment(typeSegment, this._type);
+    type.hint.textContent = this._describe(WORLD_TYPE_OPTIONS, this._type);
 
     /* -- actions ---------------------------------------------------------- */
-    const actions = el('div', 'vox-row vox-create-actions');
-    const create = makeButton('Erstellen', 'vox-btn--primary vox-create-submit', () => this._submit());
-    const back = makeButton('Zurück', 'vox-btn--ghost vox-create-back', () => {
+    foot.appendChild(makeButton('Zurück', 'vx-btn--ghost', () => {
       this._sound('ui_back');
       this.manager.back();
-    });
-    actions.appendChild(back);
-    actions.appendChild(create);
-    panel.appendChild(actions);
-
-    container.appendChild(panel);
+    }));
+    foot.appendChild(el('div', 'vx-spacer'));
+    foot.appendChild(makeButton('Erstellen', 'vx-btn--primary', () => this._submit()));
   }
 
   /**
-   * Mark the active button of a choice group.
-   * @param {HTMLElement} group The `.vox-choice` container.
-   * @param {string} value Active value.
    * @returns {void}
-   * @private
    */
-  _syncChoice(group, value) {
-    const kids = group.children;
-    for (let i = 0; i < kids.length; i++) {
-      const child = /** @type {HTMLElement} */ (kids[i]);
-      child.classList.toggle('is-active', child.dataset.value === value);
-      child.setAttribute('aria-pressed', child.dataset.value === value ? 'true' : 'false');
-    }
+  unmount() {
+    this._nameInput = null;
+    this._seedInput = null;
+    this._seedHint = null;
+    this._modeHint = null;
+    this._typeHint = null;
+    super.unmount();
   }
 
   /**
@@ -799,8 +830,8 @@ export class WorldList extends Screen {
    */
   constructor(manager) {
     super(manager);
-    /** @type {HTMLElement|null} Grid the cards live in. @private */
-    this._grid = null;
+    /** @type {HTMLElement|null} List the cards live in. @private */
+    this._list = null;
     /** @type {number} Increments per mount; stale async loads are dropped. @private */
     this._loadToken = 0;
     /** @type {boolean} Guard against double activation. @private */
@@ -815,31 +846,36 @@ export class WorldList extends Screen {
   mount(container, data) {
     super.mount(container, data);
     this._busy = false;
-    const panel = el('div', 'vox-panel vox-list-panel');
-    panel.appendChild(el('h2', 'vox-list-title', 'Welt laden'));
-    panel.appendChild(el('p', 'vox-panel-sub', 'Gespeicherte Welten aus dem lokalen Speicher.'));
+    const { body, foot } = this._buildCard(container, 'Welt laden',
+      'Gespeicherte Welten aus dem lokalen Speicher.');
 
-    this._grid = el('div', 'vox-list-grid');
-    this._grid.appendChild(el('div', 'vox-list-empty', 'Welten werden geladen…'));
-    panel.appendChild(this._grid);
+    this._list = el('div', 'vx-worldlist vx-scroll');
+    this._list.appendChild(el('div', 'vx-worldlist__empty', 'Welten werden geladen…'));
+    body.appendChild(this._list);
 
-    const actions = el('div', 'vox-row vox-list-footer');
-    actions.appendChild(makeButton('Zurück', 'vox-btn--ghost vox-list-back', () => {
+    foot.appendChild(makeButton('Zurück', 'vx-btn--ghost', () => {
       this._sound('ui_back');
       this.manager.back();
     }));
-    actions.appendChild(makeButton('Neue Welt', 'vox-btn--primary vox-list-new', () => {
+    foot.appendChild(el('div', 'vx-spacer'));
+    foot.appendChild(makeButton('Neue Welt', 'vx-btn--primary', () => {
       this._sound('click');
       this.manager.show('worldcreate');
     }));
-    panel.appendChild(actions);
-    container.appendChild(panel);
 
     this._reload();
   }
 
   /**
-   * Fetch the world list and rebuild the grid.
+   * @returns {void}
+   */
+  unmount() {
+    this._list = null;
+    super.unmount();
+  }
+
+  /**
+   * Fetch the world list and rebuild the cards.
    * @returns {void}
    * @private
    */
@@ -865,28 +901,28 @@ export class WorldList extends Screen {
   }
 
   /**
-   * Build the card grid.
+   * Build the card list.
    * @param {Array<Object>} worlds World metadata records.
    * @returns {void}
    * @private
    */
   _render(worlds) {
-    const grid = this._grid;
-    if (!grid) return;
-    grid.textContent = '';
+    const list = this._list;
+    if (!list) return;
+    list.textContent = '';
     this.manager.knownWorldNames.clear();
 
-    if (worlds.length === 0) {
-      grid.appendChild(el('div', 'vox-list-empty',
+    const usable = worlds.filter((meta) => meta && typeof meta.id === 'string');
+    if (usable.length === 0) {
+      list.appendChild(el('div', 'vx-worldlist__empty',
         'Noch keine Welt gespeichert. Erstelle eine neue Welt, um loszulegen.'));
       this.manager.refreshFocusRing();
       return;
     }
 
-    for (const meta of worlds) {
-      if (!meta || typeof meta.id !== 'string') continue;
+    for (const meta of usable) {
       this.manager.knownWorldNames.add(String(meta.name || ''));
-      grid.appendChild(this._card(meta));
+      list.appendChild(this._card(meta));
     }
     this.manager.refreshFocusRing();
   }
@@ -898,28 +934,40 @@ export class WorldList extends Screen {
    * @private
    */
   _card(meta) {
-    const card = el('div', 'vox-list-card');
-    card.appendChild(el('div', 'vox-list-name', String(meta.name || 'Unbenannt')));
+    const name = String(meta.name || 'Unbenannt');
+    const card = el('div', 'vx-world');
+    card.dataset.world = String(meta.id);
 
-    const modeLabel = meta.gameMode === 'creative' ? 'Kreativ'
-      : (meta.gameMode === 'spectator' ? 'Zuschauer' : 'Überleben');
-    const metaRow = el('div', 'vox-list-meta');
-    metaRow.appendChild(el('span', 'vox-list-mode', modeLabel));
-    metaRow.appendChild(el('span', 'vox-list-seed', `Seed ${meta.seed | 0}`));
-    metaRow.appendChild(el('span', 'vox-list-played', `Zuletzt: ${formatTimestamp(meta.lastPlayed)}`));
-    metaRow.appendChild(el('span', 'vox-list-time', `Spielzeit: ${formatPlayTime(meta.playTime)}`));
-    card.appendChild(metaRow);
+    const thumb = el('div', 'vx-world__thumb', name.trim().slice(0, 1).toUpperCase() || '?');
+    thumb.setAttribute('aria-hidden', 'true');
+    card.appendChild(thumb);
 
-    const actions = el('div', 'vox-list-actions');
-    const play = makeButton('Spielen', 'vox-btn--primary vox-list-play', () => this._play(meta));
-    actions.appendChild(play);
+    const info = el('div', 'vx-world__info');
+    info.appendChild(el('div', 'vx-world__name vx-truncate', name));
 
-    const del = makeButton('Löschen', 'vox-btn--danger vox-list-delete', () => {
+    const modeLabel = GAME_MODE_LABELS[meta.gameMode] || GAME_MODE_LABELS.survival;
+    const metaRow = el('div', 'vx-world__meta');
+    metaRow.appendChild(el('span', 'vx-badge vx-badge--muted', modeLabel));
+    metaRow.appendChild(el('span', 'vx-mono', `Seed ${meta.seed | 0}`));
+    metaRow.appendChild(el('span', '', `Zuletzt: ${formatTimestamp(meta.lastPlayed)}`));
+    metaRow.appendChild(el('span', '', `Spielzeit: ${formatPlayTime(meta.playTime)}`));
+    info.appendChild(metaRow);
+    card.appendChild(info);
+
+    const actions = el('div', 'vx-world__actions');
+    actions.appendChild(makeButton('Spielen', 'vx-btn--sm vx-btn--primary', () => this._play(meta)));
+    actions.appendChild(makeButton('Löschen', 'vx-btn--sm vx-btn--danger', () => {
       this._sound('click');
       this._confirmDelete(card, actions, meta);
-    });
-    actions.appendChild(del);
+    }));
     card.appendChild(actions);
+
+    card.addEventListener('click', (e) => {
+      if (card.dataset.confirm === '1') return;
+      const target = /** @type {HTMLElement|null} */ (e.target);
+      if (target && target.closest('button')) return;
+      this._play(meta);
+    });
     return card;
   }
 
@@ -932,14 +980,19 @@ export class WorldList extends Screen {
    * @private
    */
   _confirmDelete(card, actions, meta) {
-    const confirm = el('div', 'vox-confirm vox-list-confirm');
-    confirm.appendChild(el('span', 'vox-confirm-text', 'Wirklich unwiderruflich löschen?'));
-    const yes = makeButton('Löschen', 'vox-btn--danger', () => {
+    card.dataset.confirm = '1';
+    setState(card, 'is-selected', true);
+    const confirm = el('div', 'vx-world__actions');
+    confirm.appendChild(el('span', 'vx-hint', 'Wirklich löschen?'));
+
+    const yes = makeButton('Ja, löschen', 'vx-btn--sm vx-btn--danger', () => {
       confirm.textContent = '';
-      confirm.appendChild(el('span', 'vox-confirm-text', 'Wird gelöscht…'));
+      confirm.appendChild(el('span', 'vx-hint', 'Wird gelöscht…'));
       this._delete(meta);
     });
-    const no = makeButton('Abbrechen', 'vox-btn--ghost', () => {
+    const no = makeButton('Abbrechen', 'vx-btn--sm vx-btn--ghost', () => {
+      card.dataset.confirm = '0';
+      setState(card, 'is-selected', false);
       card.replaceChild(actions, confirm);
       this.manager.refreshFocusRing();
       this._sound('ui_back');
@@ -1007,12 +1060,15 @@ export class SettingsScreen extends Screen {
    */
   constructor(manager) {
     super(manager);
+    this.width = 'wide';
     /** @type {string} Active category tab. @private */
     this._tab = CATEGORIES[0];
     /** @type {HTMLElement|null} @private */
     this._list = null;
     /** @type {HTMLElement|null} @private */
-    this._tabs = null;
+    this._cats = null;
+    /** @type {HTMLElement|null} @private */
+    this._presets = null;
     /** @type {HTMLElement|null} @private */
     this._presetHint = null;
     /** @type {Map<string, {sync:function():void, item:HTMLElement}>} Widgets by key. @private */
@@ -1035,15 +1091,22 @@ export class SettingsScreen extends Screen {
       this._tab = data.tab;
     }
 
-    const panel = el('div', 'vox-panel vox-settings-panel');
-    panel.appendChild(el('h2', 'vox-settings-title', 'Einstellungen'));
-    panel.appendChild(el('p', 'vox-panel-sub',
-      'Änderungen greifen sofort und werden automatisch gespeichert.'));
+    const { panel, body, foot } = this._buildCard(container, 'Einstellungen',
+      'Änderungen greifen sofort und werden automatisch gespeichert.');
 
-    /* -- tabs ------------------------------------------------------------- */
-    this._tabs = el('div', 'vox-settings-tabs');
+    /* -- category rail + list --------------------------------------------- */
+    const split = el('div', 'vx-settings');
+    this._cats = el('div', 'vx-settings__cats');
+    this._cats.setAttribute('role', 'tablist');
     for (const category of CATEGORIES) {
-      const b = makeButton(category, 'vox-settings-tab', () => {
+      const b = /** @type {HTMLButtonElement} */ (el('button', 'vx-settings__cat', category));
+      b.type = 'button';
+      b.setAttribute('data-nav', '1');
+      b.setAttribute('role', 'tab');
+      b.dataset.tab = category;
+      const count = this._schema().filter((e) => e && e.category === category).length;
+      b.appendChild(el('span', 'vx-badge vx-badge--muted', String(count)));
+      b.addEventListener('click', () => {
         if (this._tab === category) return;
         this._tab = category;
         this._syncTabs();
@@ -1051,23 +1114,24 @@ export class SettingsScreen extends Screen {
         this._sound('click');
         this.manager.refreshFocusRing();
       });
-      b.dataset.tab = category;
-      this._tabs.appendChild(b);
+      this._cats.appendChild(b);
     }
-    panel.appendChild(this._tabs);
-    this._syncTabs();
+    split.appendChild(this._cats);
 
-    /* -- list ------------------------------------------------------------- */
-    this._list = el('div', 'vox-settings-list');
-    panel.appendChild(this._list);
+    this._list = el('div', 'vx-settings__list vx-scroll');
+    this._list.setAttribute('role', 'tabpanel');
+    split.appendChild(this._list);
+    body.appendChild(split);
+
+    this._syncTabs();
     this._buildList();
 
-    /* -- presets ---------------------------------------------------------- */
-    const presetRow = el('div', 'vox-settings-foot vox-settings-presets');
-    presetRow.appendChild(el('span', 'vox-field-label vox-settings-presetlabel', 'Voreinstellung'));
+    /* -- quality presets --------------------------------------------------- */
+    const presetBar = el('div', 'vx-settings__presets');
+    presetBar.appendChild(el('span', 'vx-caps', 'Voreinstellung'));
+    this._presets = el('div', 'vx-presets');
     for (const name of Object.keys(QUALITY_PRESETS)) {
-      const label = PRESET_LABELS[name] || name;
-      const b = makeButton(label, 'vox-settings-preset', () => {
+      const b = makeButton(PRESET_LABELS[name] || name, 'vx-btn--sm', () => {
         if (settings && typeof settings.applyPreset === 'function') settings.applyPreset(name);
         this._syncAll();
         this._syncPresetHint();
@@ -1075,30 +1139,28 @@ export class SettingsScreen extends Screen {
       });
       b.dataset.preset = name;
       b.title = PRESET_HINTS[name] || '';
-      presetRow.appendChild(b);
+      this._presets.appendChild(b);
     }
-    panel.appendChild(presetRow);
-    this._presetHint = el('p', 'vox-field-hint vox-settings-presethint', '');
-    panel.appendChild(this._presetHint);
+    presetBar.appendChild(this._presets);
+    this._presetHint = el('p', 'vx-hint', '');
+    presetBar.appendChild(this._presetHint);
+    panel.insertBefore(presetBar, foot);
     this._syncPresetHint();
 
-    /* -- footer ----------------------------------------------------------- */
-    const foot = el('div', 'vox-settings-foot');
-    foot.appendChild(makeButton('Zurück', 'vox-btn--ghost vox-settings-back', () => {
+    /* -- footer ------------------------------------------------------------ */
+    foot.appendChild(makeButton('Zurück', 'vx-btn--ghost', () => {
       this._sound('ui_back');
       this.manager.back();
     }));
-    foot.appendChild(makeButton('Alles zurücksetzen', 'vox-btn--danger vox-settings-reset', () => {
+    foot.appendChild(el('div', 'vx-spacer'));
+    foot.appendChild(makeButton('Alles zurücksetzen', 'vx-btn--danger vx-btn--sm', () => {
       if (settings && typeof settings.reset === 'function') settings.reset();
       this._syncAll();
       this._syncPresetHint();
       this._sound('ui_back');
     }));
-    panel.appendChild(foot);
 
-    container.appendChild(panel);
-
-    /* -- external changes ------------------------------------------------- */
+    /* -- external changes -------------------------------------------------- */
     if (settings && typeof settings.on === 'function') {
       this._onChange = (key) => {
         const entry = this._widgets.get(key);
@@ -1128,23 +1190,52 @@ export class SettingsScreen extends Screen {
     this._onBulk = null;
     this._widgets.clear();
     this._list = null;
-    this._tabs = null;
+    this._cats = null;
+    this._presets = null;
     this._presetHint = null;
     super.unmount();
   }
 
   /**
-   * Highlight the active tab button.
+   * The settings schema as a plain array, whatever the store hands back.
+   *
+   * `Settings#getSchema()` returns the frozen `SETTINGS_SCHEMA` array; a stub
+   * game in a test may return nothing at all. Normalising here is what keeps
+   * the screen from silently rendering an empty card.
+   * @returns {Array<Object>} Schema entries, possibly empty.
+   * @private
+   */
+  _schema() {
+    const settings = this._settings();
+    if (!settings || typeof settings.getSchema !== 'function') return [];
+    let raw = null;
+    try {
+      raw = settings.getSchema();
+    } catch (err) {
+      console.warn('[VOXELIA] screens: getSchema failed', err);
+      return [];
+    }
+    if (Array.isArray(raw)) return raw.slice();
+    if (raw && typeof raw === 'object') {
+      if (typeof raw[Symbol.iterator] === 'function') return Array.from(raw);
+      return Object.keys(raw).map((key) => raw[key]).filter((e) => e && typeof e === 'object');
+    }
+    return [];
+  }
+
+  /**
+   * Highlight the active category button.
    * @returns {void}
    * @private
    */
   _syncTabs() {
-    if (!this._tabs) return;
-    const kids = this._tabs.children;
+    if (!this._cats) return;
+    const kids = this._cats.children;
     for (let i = 0; i < kids.length; i++) {
       const child = /** @type {HTMLElement} */ (kids[i]);
-      child.classList.toggle('is-active', child.dataset.tab === this._tab);
-      child.setAttribute('aria-selected', child.dataset.tab === this._tab ? 'true' : 'false');
+      const active = child.dataset.tab === this._tab;
+      setState(child, 'is-active', active);
+      child.setAttribute('aria-selected', active ? 'true' : 'false');
     }
   }
 
@@ -1160,7 +1251,7 @@ export class SettingsScreen extends Screen {
     this._widgets.clear();
 
     const settings = this._settings();
-    const schema = (settings && typeof settings.getSchema === 'function') ? settings.getSchema() : [];
+    const schema = this._schema();
     let count = 0;
     for (const entry of schema) {
       if (!entry || entry.category !== this._tab) continue;
@@ -1171,7 +1262,9 @@ export class SettingsScreen extends Screen {
       }
     }
     if (count === 0) {
-      list.appendChild(el('div', 'vox-list-empty', 'In dieser Kategorie gibt es nichts einzustellen.'));
+      list.appendChild(el('p', 'vx-hint', schema.length === 0
+        ? 'Die Einstellungen sind noch nicht verfügbar.'
+        : 'In dieser Kategorie gibt es nichts einzustellen.'));
     }
   }
 
@@ -1183,47 +1276,54 @@ export class SettingsScreen extends Screen {
    * @private
    */
   _buildRow(entry, settings) {
-    const item = el('div', `vox-settings-item vox-settings-item--${entry.type}`);
+    const item = el('div', 'vx-field');
     item.dataset.key = entry.key;
 
-    const name = el('div', 'vox-settings-name', entry.label || entry.key);
-    if (entry.restart) {
-      const flag = el('span', 'vox-settings-restart', ' · Neustart nötig');
-      name.appendChild(flag);
-    }
-    item.appendChild(name);
-    item.appendChild(el('div', 'vox-settings-desc', entry.description || ''));
+    const label = el('div', 'vx-field__label', entry.label || entry.key);
+    if (entry.restart) label.appendChild(el('span', 'vx-badge vx-badge--warn', 'Neustart'));
+    item.appendChild(label);
 
-    const widget = el('div', 'vox-settings-widget');
-    item.appendChild(widget);
+    const control = el('div', 'vx-field__control');
+    item.appendChild(control);
+    item.appendChild(el('p', 'vx-field__desc', entry.description || ''));
 
     const read = () => (settings && typeof settings.get === 'function' ? settings.get(entry.key) : entry.default);
     const write = (value) => {
       if (settings && typeof settings.set === 'function') settings.set(entry.key, value);
     };
+    const format = (value) => ((settings && typeof settings.formatValue === 'function')
+      ? settings.formatValue(entry.key)
+      : String(value));
 
     /** @type {function():void} */
     let sync = () => {};
 
     if (entry.type === 'bool') {
-      const toggle = makeButton('', 'vox-toggle vox-settings-toggle', () => {
+      const toggle = /** @type {HTMLButtonElement} */ (el('button', 'vx-toggle'));
+      toggle.type = 'button';
+      toggle.setAttribute('data-nav', '1');
+      toggle.setAttribute('role', 'switch');
+      toggle.setAttribute('aria-label', entry.label || entry.key);
+      const value = el('span', 'vx-field__value', '');
+      toggle.addEventListener('click', () => {
         write(!read());
         sync();
         this._syncPresetHint();
         this._sound('ui_toggle');
       });
-      toggle.setAttribute('role', 'switch');
-      widget.appendChild(toggle);
+      control.appendChild(value);
+      control.appendChild(toggle);
       sync = () => {
         const on = !!read();
-        toggle.textContent = on ? 'An' : 'Aus';
-        toggle.classList.toggle('is-on', on);
+        setState(toggle, 'is-on', on);
         toggle.setAttribute('aria-checked', on ? 'true' : 'false');
+        value.textContent = on ? 'An' : 'Aus';
         this._markDefault(item, entry, read());
       };
     } else if (entry.type === 'enum') {
-      const select = /** @type {HTMLSelectElement} */ (el('select', 'vox-select vox-settings-select'));
+      const select = /** @type {HTMLSelectElement} */ (el('select', 'vx-select'));
       select.setAttribute('data-nav', '1');
+      select.setAttribute('aria-label', entry.label || entry.key);
       const options = (settings && typeof settings.getOptions === 'function')
         ? settings.getOptions(entry.key)
         : (entry.options || []);
@@ -1240,32 +1340,38 @@ export class SettingsScreen extends Screen {
         this._syncPresetHint();
         this._sound('click');
       });
-      widget.appendChild(select);
+      control.appendChild(select);
       sync = () => {
         select.value = String(read());
         this._markDefault(item, entry, read());
       };
     } else if (entry.type === 'int' || entry.type === 'float') {
-      const slider = /** @type {HTMLInputElement} */ (el('input', 'vox-slider vox-settings-slider'));
+      const min = Number.isFinite(entry.min) ? entry.min : 0;
+      const max = Number.isFinite(entry.max) ? entry.max : 1;
+      const slider = /** @type {HTMLInputElement} */ (el('input', 'vx-slider'));
       slider.type = 'range';
-      slider.min = String(Number.isFinite(entry.min) ? entry.min : 0);
-      slider.max = String(Number.isFinite(entry.max) ? entry.max : 1);
+      slider.min = String(min);
+      slider.max = String(max);
       slider.step = String(Number.isFinite(entry.step) ? entry.step : (entry.type === 'int' ? 1 : 0.01));
       slider.setAttribute('data-nav', '1');
-      const value = el('span', 'vox-settings-value', '');
+      slider.setAttribute('aria-label', entry.label || entry.key);
+      const value = el('span', 'vx-field__value', '');
       slider.addEventListener('input', () => {
         write(entry.type === 'int' ? Math.round(Number(slider.value)) : Number(slider.value));
         sync();
       });
       slider.addEventListener('change', () => this._syncPresetHint());
-      widget.appendChild(slider);
-      widget.appendChild(value);
+      control.appendChild(slider);
+      control.appendChild(value);
       sync = () => {
         const current = Number(read());
         if (Number.isFinite(current)) slider.value = String(current);
-        value.textContent = (settings && typeof settings.formatValue === 'function')
-          ? settings.formatValue(entry.key)
-          : String(read());
+        // The track gradient is painted from `--fill`; without it the filled
+        // part of the slider would never move in WebKit/Blink.
+        const span = max - min;
+        const fill = span > 0 ? clamp((Number(slider.value) - min) / span, 0, 1) : 0;
+        slider.style.setProperty('--fill', `${(fill * 100).toFixed(2)}%`);
+        value.textContent = format(read());
         this._markDefault(item, entry, read());
       };
     } else {
@@ -1286,8 +1392,8 @@ export class SettingsScreen extends Screen {
    * @private
    */
   _markDefault(item, entry, value) {
-    const def = DEFAULTS[entry.key];
-    item.classList.toggle('is-modified', def !== undefined && !Object.is(def, value));
+    const fallback = DEFAULTS[entry.key];
+    setState(item, 'is-changed', fallback !== undefined && !Object.is(fallback, value));
   }
 
   /**
@@ -1306,19 +1412,18 @@ export class SettingsScreen extends Screen {
    */
   _syncPresetHint() {
     const settings = this._settings();
-    const detected = (settings && typeof settings.detectPreset === 'function')
+    const active = (settings && typeof settings.detectPreset === 'function')
       ? settings.detectPreset() : null;
     if (this._presetHint) {
-      this._presetHint.textContent = detected
-        ? (PRESET_HINTS[detected] || `Voreinstellung: ${PRESET_LABELS[detected] || detected}`)
+      this._presetHint.textContent = active
+        ? (PRESET_HINTS[active] || `Voreinstellung: ${PRESET_LABELS[active] || active}`)
         : 'Eigene Konfiguration — keine Voreinstellung aktiv.';
     }
-    const root = this.root;
-    if (!root) return;
-    const buttons = root.querySelectorAll('.vox-settings-preset');
+    if (!this._presets) return;
+    const buttons = this._presets.children;
     for (let i = 0; i < buttons.length; i++) {
       const b = /** @type {HTMLElement} */ (buttons[i]);
-      b.classList.toggle('is-active', b.dataset.preset === detected);
+      setState(b, 'is-active', b.dataset.preset === active);
     }
   }
 }
@@ -1356,37 +1461,35 @@ export class ControlsScreen extends Screen {
    */
   mount(container, data) {
     super.mount(container, data);
-    const panel = el('div', 'vox-panel vox-controls-panel');
-    panel.appendChild(el('h2', 'vox-controls-title', 'Steuerung'));
-    panel.appendChild(el('p', 'vox-panel-sub',
-      'Eine Zeile anklicken und die neue Taste drücken. Escape bricht ab, Entf löscht die Belegung.'));
+    const { body, foot } = this._buildCard(container, 'Steuerung',
+      'Eine Zeile anklicken und die neue Taste drücken. Escape bricht ab, Entf löscht die Belegung.');
 
-    const list = el('div', 'vox-controls-list');
-    const input = this.game && this.game.input;
-    const actions = (input && Array.isArray(input._actionList)) ? ACTIONS : ACTIONS;
-    for (const action of actions) {
-      list.appendChild(this._row(action, input));
+    const stack = el('div', 'vx-col');
+    const list = el('div', 'vx-keylist vx-scroll');
+    for (const action of ACTIONS) {
+      list.appendChild(this._row(action));
     }
-    panel.appendChild(list);
+    stack.appendChild(list);
 
-    this._status = el('p', 'vox-field-hint vox-controls-status', '');
-    panel.appendChild(this._status);
+    this._status = el('p', 'vx-hint', 'Doppelbelegungen werden rot markiert und beim Zuweisen aufgelöst.');
+    this._status.setAttribute('role', 'status');
+    stack.appendChild(this._status);
+    body.appendChild(stack);
 
-    const foot = el('div', 'vox-settings-foot vox-controls-footer');
-    foot.appendChild(makeButton('Zurück', 'vox-btn--ghost vox-controls-back', () => {
+    foot.appendChild(makeButton('Zurück', 'vx-btn--ghost', () => {
       this._sound('ui_back');
       this.manager.back();
     }));
-    foot.appendChild(makeButton('Standard wiederherstellen', 'vox-btn--danger vox-controls-reset', () => {
+    foot.appendChild(el('div', 'vx-spacer'));
+    foot.appendChild(makeButton('Standard wiederherstellen', 'vx-btn--danger vx-btn--sm', () => {
+      const input = this.game && this.game.input;
       if (input && typeof input.resetBindings === 'function') input.resetBindings();
       saveBindings(input);
       this._syncAll();
       this._setStatus('Standardbelegung wiederhergestellt.');
       this._sound('ui_back');
     }));
-    panel.appendChild(foot);
 
-    container.appendChild(panel);
     this._syncAll();
   }
 
@@ -1403,23 +1506,21 @@ export class ControlsScreen extends Screen {
   /**
    * Build one action row.
    * @param {string} action Action name.
-   * @param {*} input The `Input` instance.
    * @returns {HTMLElement} The row button.
    * @private
    */
-  _row(action, input) {
-    const row = /** @type {HTMLButtonElement} */ (el('button', 'vox-controls-row'));
+  _row(action) {
+    const row = /** @type {HTMLButtonElement} */ (el('button', 'vx-key'));
     row.type = 'button';
     row.setAttribute('data-nav', '1');
     row.dataset.action = action;
-    row.appendChild(el('span', 'vox-controls-label', ACTION_LABELS[action] || action));
-    const key = el('span', 'vox-controls-key', '');
+    row.appendChild(el('span', 'vx-key__label', ACTION_LABELS[action] || action));
+    const key = el('span', 'vx-key__bind vx-kbd', '');
     row.appendChild(key);
-    const pad = el('span', 'vox-controls-pad', '');
+    const pad = el('span', 'vx-key__pad', '');
     row.appendChild(pad);
     row.addEventListener('click', () => this._startCapture(action));
     this._rows.set(action, { row, key, pad });
-    void input;
     return row;
   }
 
@@ -1438,7 +1539,7 @@ export class ControlsScreen extends Screen {
     this._capturing = action;
     const entry = this._rows.get(action);
     if (entry) {
-      entry.row.classList.add('is-capturing');
+      setState(entry.row, 'is-capturing', true);
       entry.key.textContent = 'Taste drücken…';
     }
     this._setStatus(`„${ACTION_LABELS[action] || action}" wartet auf eine Eingabe.`);
@@ -1486,7 +1587,7 @@ export class ControlsScreen extends Screen {
     this._capturing = null;
     if (action !== null) {
       const entry = this._rows.get(action);
-      if (entry) entry.row.classList.remove('is-capturing');
+      if (entry) setState(entry.row, 'is-capturing', false);
       if (announce) this._setStatus('Abgebrochen.');
     }
     this._syncAll();
@@ -1540,12 +1641,13 @@ export class ControlsScreen extends Screen {
       if (this._capturing === action) continue;
       const code = (input && typeof input.getBinding === 'function') ? input.getBinding(action) : null;
       entry.key.textContent = codeLabel(code);
+      setState(entry.row, 'is-unbound', !code);
       const padCode = (input && typeof input.getGamepadBinding === 'function')
         ? input.getGamepadBinding(action) : null;
       entry.pad.textContent = padCode ? codeLabel(padCode) : '';
-      const conflicted = code !== null && input && typeof input.findConflicts === 'function'
+      const conflicted = !!code && !!input && typeof input.findConflicts === 'function'
         && input.findConflicts(code, action).length > 0;
-      entry.row.classList.toggle('is-conflict', !!conflicted);
+      setState(entry.row, 'is-conflict', conflicted);
     }
   }
 
@@ -1581,33 +1683,58 @@ export class ControlsScreen extends Screen {
  */
 export class PauseScreen extends Screen {
   /**
+   * @param {ScreenManager} manager Owning manager.
+   */
+  constructor(manager) {
+    super(manager);
+    this.variant = 'pause';
+    this.width = 'narrow';
+  }
+
+  /**
    * @param {HTMLElement} container Container element.
    * @param {Object} [data] Unused.
    * @returns {void}
    */
   mount(container, data) {
     super.mount(container, data);
-    const panel = el('div', 'vox-panel vox-panel--narrow vox-pause-panel');
-    panel.appendChild(el('h2', 'vox-pause-title', 'Pause'));
+    const inner = el('div', 'vx-screen__inner');
+    const pause = el('div', 'vx-pause');
+
+    pause.appendChild(el('h2', 'vx-pause__title', 'Pause'));
 
     const world = this.game && this.game.world;
-    const name = world && typeof world.name === 'string' ? world.name : '';
-    panel.appendChild(el('p', 'vox-panel-sub', name ? `Welt: ${name}` : 'Das Spiel ist angehalten.'));
+    const meta = (this.game && this.game.worldMeta) || null;
+    const name = (meta && typeof meta.name === 'string' && meta.name)
+      || (world && typeof world.name === 'string' ? world.name : '');
+    pause.appendChild(el('p', 'vx-subtitle', name ? `Welt: ${name}` : 'Das Spiel ist angehalten.'));
 
-    const buttons = el('div', 'vox-menu-buttons vox-pause-buttons');
-    buttons.appendChild(makeButton('Weiterspielen', 'vox-btn--primary vox-pause-resume', () => {
+    const stats = this._stats(meta, world);
+    if (stats.length > 0) {
+      const grid = el('div', 'vx-pause__stats');
+      for (const [value, label] of stats) {
+        const card = el('div', 'vx-stat');
+        card.appendChild(el('div', 'vx-stat__value', value));
+        card.appendChild(el('div', 'vx-stat__label', label));
+        grid.appendChild(card);
+      }
+      pause.appendChild(grid);
+    }
+
+    const grid = el('div', 'vx-pause__grid');
+    grid.appendChild(makeButton('Weiterspielen', 'vx-btn--primary vx-btn--block', () => {
       this._sound('ui_close');
       this.manager.resumeGame();
     }));
-    buttons.appendChild(makeButton('Einstellungen', 'vox-pause-settings', () => {
+    grid.appendChild(makeButton('Einstellungen', 'vx-btn--ghost', () => {
       this._sound('click');
       this.manager.show('settings');
     }));
-    buttons.appendChild(makeButton('Steuerung', 'vox-pause-controls', () => {
+    grid.appendChild(makeButton('Steuerung', 'vx-btn--ghost', () => {
       this._sound('click');
       this.manager.show('controls');
     }));
-    const quit = makeButton('Speichern und beenden', 'vox-btn--danger vox-pause-quit', () => {
+    const quit = makeButton('Speichern und beenden', 'vx-btn--danger vx-btn--block', () => {
       quit.disabled = true;
       quit.textContent = 'Wird gespeichert…';
       this._sound('ui_back');
@@ -1615,10 +1742,40 @@ export class PauseScreen extends Screen {
         this.manager.reportError('Die Welt konnte nicht gespeichert werden.', err);
       });
     });
-    buttons.appendChild(quit);
-    panel.appendChild(buttons);
+    grid.appendChild(quit);
+    pause.appendChild(grid);
 
-    container.appendChild(panel);
+    inner.appendChild(pause);
+    container.appendChild(inner);
+  }
+
+  /**
+   * Collect the little stat cards above the buttons. Only values the running
+   * game genuinely carries are listed, so the row shrinks (or disappears)
+   * instead of showing a placeholder.
+   * @param {Object|null} meta `game.worldMeta`, when a world is loaded.
+   * @param {*} world The `World` instance.
+   * @returns {Array<[string, string]>} `[value, German label]` pairs.
+   * @private
+   */
+  _stats(meta, world) {
+    /** @type {Array<[string, string]>} */
+    const out = [];
+    const player = this.game && this.game.player;
+    const mode = (player && typeof player.gameMode === 'string' && player.gameMode)
+      || (meta && typeof meta.gameMode === 'string' ? meta.gameMode : '');
+    if (mode) out.push([GAME_MODE_LABELS[mode] || mode, 'Modus']);
+
+    const generator = meta && typeof meta.generator === 'string' ? meta.generator : '';
+    if (generator) {
+      const type = WORLD_TYPE_OPTIONS.find((o) => o.value === generator);
+      out.push([type ? type.label : generator, 'Welttyp']);
+    }
+
+    const seed = (meta && Number.isFinite(meta.seed)) ? meta.seed
+      : (world && Number.isFinite(world.seed) ? world.seed : null);
+    if (seed !== null) out.push([String(seed | 0), 'Startwert']);
+    return out;
   }
 
   /**
@@ -1641,6 +1798,15 @@ export class PauseScreen extends Screen {
  */
 export class DeathScreen extends Screen {
   /**
+   * @param {ScreenManager} manager Owning manager.
+   */
+  constructor(manager) {
+    super(manager);
+    this.variant = 'death';
+    this.width = 'narrow';
+  }
+
+  /**
    * @param {HTMLElement} container Container element.
    * @param {Object} [data] `{message, label, source, score, xp, level}` — the
    *   payload of the combat system's `'death'` event works unchanged.
@@ -1651,8 +1817,9 @@ export class DeathScreen extends Screen {
     const payload = data || {};
     const player = this.game && this.game.player;
 
-    const inner = el('div', 'vox-death-inner');
-    inner.appendChild(el('h2', 'vox-death-title', 'Du bist gestorben'));
+    const inner = el('div', 'vx-screen__inner');
+    const death = el('div', 'vx-death');
+    death.appendChild(el('h2', 'vx-death__title', 'Du bist gestorben'));
 
     const message = typeof payload.message === 'string' && payload.message.length > 0
       ? payload.message
@@ -1660,28 +1827,30 @@ export class DeathScreen extends Screen {
     const cause = typeof payload.label === 'string' && payload.label.length > 0
       ? `${message} · ${payload.label}`
       : message;
-    inner.appendChild(el('p', 'vox-death-cause', `Du ${cause}.`));
+    death.appendChild(el('p', 'vx-death__cause', `Du ${cause}.`));
 
     const score = Number.isFinite(payload.score) ? payload.score
       : (Number.isFinite(payload.xp) ? payload.xp
         : (player && Number.isFinite(player.xp) ? player.xp : 0));
     const level = Number.isFinite(payload.level) ? payload.level
       : (player && Number.isFinite(player.xpLevel) ? player.xpLevel : 0);
-    inner.appendChild(el('p', 'vox-death-score',
+    death.appendChild(el('p', 'vx-death__score',
       `Punkte: ${Math.max(0, Math.round(score))} · Stufe: ${Math.max(0, Math.round(level))}`));
 
-    const buttons = el('div', 'vox-death-buttons');
-    buttons.appendChild(makeButton('Wiederbeleben', 'vox-btn--primary vox-death-respawn', () => {
+    const actions = el('div', 'vx-death__actions');
+    actions.appendChild(makeButton('Wiederbeleben', 'vx-btn--primary vx-btn--lg', () => {
       this._sound('ui_select');
       this.manager.respawn();
     }));
-    buttons.appendChild(makeButton('Zum Hauptmenü', 'vox-death-menu', () => {
+    actions.appendChild(makeButton('Zum Hauptmenü', 'vx-btn--ghost vx-btn--lg', () => {
       this._sound('ui_back');
       this.manager.saveAndQuit().catch((err) => {
         this.manager.reportError('Die Welt konnte nicht gespeichert werden.', err);
       });
     }));
-    inner.appendChild(buttons);
+    death.appendChild(actions);
+
+    inner.appendChild(death);
     container.appendChild(inner);
   }
 
@@ -1710,6 +1879,8 @@ export class LoadingScreen extends Screen {
    */
   constructor(manager) {
     super(manager);
+    this.variant = 'loading';
+    this.width = 'narrow';
     this.releasesPointerLock = true;
     /** @type {HTMLElement|null} @private */
     this._fill = null;
@@ -1733,22 +1904,31 @@ export class LoadingScreen extends Screen {
   mount(container, data) {
     super.mount(container, data);
     const payload = data || {};
-    container.appendChild(el('h2', 'vox-loading-title',
+    const inner = el('div', 'vx-screen__inner');
+    const loading = el('div', 'vx-loading');
+
+    loading.appendChild(el('h2', 'vx-loading__title',
       typeof payload.title === 'string' ? payload.title : 'VOXELIA'));
 
-    const bar = el('div', 'vox-loading-bar');
-    this._fill = el('i', 'vox-loading-fill');
+    const bar = el('div', 'vx-loading__bar');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '100');
+    this._fill = el('i');
     bar.appendChild(this._fill);
-    container.appendChild(bar);
+    loading.appendChild(bar);
 
-    this._step = el('div', 'vox-loading-step',
+    this._step = el('div', 'vx-loading__status',
       typeof payload.step === 'string' ? payload.step : 'Initialisiere…');
-    container.appendChild(this._step);
+    loading.appendChild(this._step);
 
     this._tipIndex = (Math.random() * LOADING_TIPS.length) | 0;
-    this._tip = el('div', 'vox-loading-tip', LOADING_TIPS[this._tipIndex]);
-    container.appendChild(this._tip);
+    this._tip = el('div', 'vx-loading__tip', LOADING_TIPS[this._tipIndex]);
+    loading.appendChild(this._tip);
     this._tipTimer = TIP_INTERVAL;
+
+    inner.appendChild(loading);
+    container.appendChild(inner);
 
     this._progress = 0;
     if (Number.isFinite(payload.progress)) this.setProgress(payload.progress, null);
@@ -1773,7 +1953,11 @@ export class LoadingScreen extends Screen {
   setProgress(fraction, step) {
     const value = clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1);
     this._progress = value;
-    if (this._fill) this._fill.style.width = `${(value * 100).toFixed(1)}%`;
+    if (this._fill) {
+      this._fill.style.width = `${(value * 100).toFixed(1)}%`;
+      const bar = this._fill.parentNode;
+      if (bar && bar.setAttribute) bar.setAttribute('aria-valuenow', String(Math.round(value * 100)));
+    }
     if (this._step && typeof step === 'string' && step.length > 0) {
       this._step.textContent = `${step} · ${Math.round(value * 100)}%`;
     } else if (this._step) {
@@ -1794,11 +1978,11 @@ export class LoadingScreen extends Screen {
     this._tipTimer = TIP_INTERVAL;
     this._tipIndex = (this._tipIndex + 1) % LOADING_TIPS.length;
     const tip = this._tip;
-    tip.classList.add('is-fading');
+    setState(tip, 'is-fading', true);
     window.setTimeout(() => {
       if (!this.mounted || this._tip !== tip) return;
       tip.textContent = LOADING_TIPS[this._tipIndex];
-      tip.classList.remove('is-fading');
+      setState(tip, 'is-fading', false);
     }, 320);
   }
 
@@ -1832,17 +2016,12 @@ export class ScreenManager {
    * @param {HTMLElement} root The `#ui` root element.
    */
   constructor(game, root) {
-    ensureStyles();
-
     /** @type {*} The game. */
     this.game = game;
     /** @type {HTMLElement} UI root. */
     this.root = root;
     /** @type {HTMLElement} Layer every screen container is appended to. */
-    this.layer = el('div', 'vox-screens');
-    this.layer.style.position = 'absolute';
-    this.layer.style.inset = '0';
-    this.layer.style.pointerEvents = 'none';
+    this.layer = el('div', 'vx-screens');
     if (root) root.appendChild(this.layer);
 
     /** @type {Map<string, Screen>} Registered screens by key. */
@@ -2177,12 +2356,15 @@ export class ScreenManager {
   _mount(name, screen, data) {
     this._unmount();
 
-    const container = el('div', `vox-screen vox-screen--${name}`);
+    const classes = ['vx-screen'];
+    if (screen.variant) classes.push(`vx-screen--${screen.variant}`);
+    if (screen.width) classes.push(`vx-screen--${screen.width}`);
+    const container = el('div', classes.join(' '));
+    container.dataset.screen = name;
     container.style.pointerEvents = 'auto';
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-modal', 'true');
     this.layer.appendChild(container);
-    this.layer.style.pointerEvents = 'auto';
 
     this._container = container;
     this._current = screen;
@@ -2201,6 +2383,12 @@ export class ScreenManager {
     } catch (err) {
       this._reportOnce(`mount:${name}`, err);
     }
+
+    // Resolve the closed state once, then open: the forced reflow gives the
+    // opacity/transform transition a start value without waiting for a frame,
+    // so the screen still animates even when rAF is throttled.
+    void container.offsetWidth;
+    setState(container, 'is-open', true);
 
     this.refreshFocusRing();
     this._focusIndex = 0;
@@ -2232,7 +2420,6 @@ export class ScreenManager {
     this._currentData = undefined;
     this._focusRing = [];
     this._focusIndex = 0;
-    this.layer.style.pointerEvents = 'none';
     const input = this.game && this.game.input;
     if (input) input.typing = false;
   }

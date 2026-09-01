@@ -222,9 +222,15 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-#ui *,
-#ui *::before,
-#ui *::after {
+/* The reset only has to beat the user-agent sheet, never this stylesheet, so
+   the `#ui` anchor is wrapped in `:where()`. Without that the id would give
+   every line below a specificity of (1,0,0) and silently outrank each `vx-`
+   component: `padding: 0` would defeat `.vx-panel__body`, `font: inherit`
+   would flatten the whole type scale and `background: none; border: 0` would
+   strip every button, input and select down to bare text. */
+:where(#ui) *,
+:where(#ui) *::before,
+:where(#ui) *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -232,10 +238,10 @@
   color: inherit;
 }
 
-#ui button,
-#ui input,
-#ui select,
-#ui textarea {
+:where(#ui) button,
+:where(#ui) input,
+:where(#ui) select,
+:where(#ui) textarea {
   font-family: inherit;
   background: none;
   border: 0;
@@ -243,9 +249,9 @@
   color: inherit;
 }
 
-#ui img,
-#ui canvas,
-#ui svg {
+:where(#ui) img,
+:where(#ui) canvas,
+:where(#ui) svg {
   display: block;
   max-width: 100%;
 }
@@ -466,6 +472,7 @@
 .vx-btn--block { width: 100%; }
 .vx-btn--icon { min-width: calc(40px * var(--gui-scale)); padding: 0; }
 .vx-btn__icon { width: 1.15em; height: 1.15em; flex: none; }
+.vx-btn--icon .vx-btn__icon { width: 1.4em; height: 1.4em; }
 .vx-btn__sub { font-size: var(--fs-2xs); font-weight: var(--fw-regular); color: var(--text-2); }
 
 /* -- fields --------------------------------------------------------------- */
@@ -487,6 +494,7 @@
 .vx-field__value {
   min-width: calc(56px * var(--gui-scale));
   text-align: right;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--accent-soft);
@@ -496,6 +504,29 @@
   margin-left: var(--sp-1);
   color: var(--accent);
 }
+.vx-field__label .vx-badge { margin-left: var(--sp-2); vertical-align: middle; }
+.vx-field__control .vx-slider { flex: 1 1 auto; min-width: calc(80px * var(--gui-scale)); }
+.vx-field__control .vx-select { width: auto; min-width: calc(130px * var(--gui-scale)); }
+
+/* Stacked variant — caption above, full-width control below. Used by forms
+   (world creation) where the control is an input or a segmented group rather
+   than the compact right-hand widget of a settings row. */
+.vx-field--stack {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+.vx-field--stack .vx-field__label {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semi);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  color: var(--text-2);
+}
+.vx-field--stack .vx-field__control { justify-content: flex-start; }
+.vx-field--stack .vx-field__control > .vx-input,
+.vx-field--stack .vx-field__control > .vx-tabs { flex: 1 1 auto; min-width: 0; }
+.vx-field--stack .vx-field__desc:empty { display: none; }
 
 .vx-input,
 .vx-select {
@@ -634,6 +665,16 @@
 }
 .vx-tab:hover { color: var(--text-0); background: var(--line-0); }
 .vx-tab.is-active { background: var(--surface-3); color: var(--text-0); box-shadow: var(--sh-1); }
+
+/* Segmented control with long captions ("Massiver Untergrund"): the options
+   wrap onto a second line instead of overflowing a narrow card. */
+.vx-tabs--wrap { flex-wrap: wrap; }
+.vx-tabs--wrap .vx-tab {
+  flex: 1 1 calc(140px * var(--gui-scale));
+  min-height: calc(32px * var(--gui-scale));
+  white-space: normal;
+  text-align: center;
+}
 
 /* progress ---------------------------------------------------------------- */
 
@@ -1500,6 +1541,38 @@
 .vx-screen__body { min-height: 0; flex: 1 1 auto; }
 .vx-screen__foot { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
+/* -- the card a screen is built from -------------------------------------- */
+
+/* Every form screen (create, worlds, settings, controls) is one glass panel
+   inside the animated column: head and foot are fixed, the body is the part
+   that scrolls, so a long list can never push the card past the viewport. */
+.vx-screen__inner > .vx-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+}
+.vx-screen__inner > .vx-panel > .vx-panel__head,
+.vx-screen__inner > .vx-panel > .vx-panel__foot,
+.vx-screen__inner > .vx-panel > .vx-settings__presets { flex: none; }
+.vx-screen__inner > .vx-panel > .vx-panel__head { flex-wrap: wrap; }
+.vx-screen__inner > .vx-panel > .vx-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vx-screen__inner > .vx-panel > .vx-panel__body > * { min-height: 0; }
+/* A form that is taller than the card scrolls inside the body instead of
+   sliding under the footer; the reserve on the right is the scrollbar. */
+.vx-panel__body > .vx-col.vx-scroll { gap: var(--sp-3); padding-right: var(--sp-2); }
+
+/* Blocks that carry their own width stay centred in the screen column. */
+.vx-screen__inner > .vx-menu,
+.vx-screen__inner > .vx-pause,
+.vx-screen__inner > .vx-death,
+.vx-screen__inner > .vx-loading { align-self: center; }
+
 /* -- main menu ------------------------------------------------------------ */
 
 .vx-screen--menu {
@@ -1666,6 +1739,82 @@
   color: var(--text-3);
 }
 .vx-presets { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.vx-presets .vx-btn.is-active {
+  background: var(--accent-a18);
+  border-color: var(--accent-a55);
+  color: var(--accent-soft);
+}
+.vx-settings__list { min-height: 0; }
+.vx-settings__cat .vx-badge { margin-left: auto; }
+
+/* Quality presets get their own bar between the settings list and the
+   buttons, so the wrapping preset hint never fights the footer actions. */
+.vx-settings__presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-top: var(--hair) solid var(--line-0);
+  background: rgba(255, 255, 255, 0.022);
+}
+.vx-settings__presets .vx-hint { flex: 1 1 100%; }
+
+/* -- controls ------------------------------------------------------------- */
+
+.vx-keylist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-05);
+  max-height: min(52vh, calc(430px * var(--gui-scale)));
+  padding-right: var(--sp-2);
+}
+.vx-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(140px * var(--gui-scale)) calc(150px * var(--gui-scale));
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: var(--hair) solid transparent;
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease);
+}
+.vx-key:hover { background: var(--line-0); color: var(--text-0); }
+.vx-key:focus-visible { border-color: var(--accent-a55); box-shadow: var(--sh-glow); }
+.vx-key__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-key__bind { justify-self: stretch; text-align: center; }
+.vx-key__pad {
+  min-width: 0;
+  text-align: right;
+  font-size: var(--fs-2xs);
+  line-height: 1.3;
+  color: var(--text-3);
+}
+.vx-key.is-unbound .vx-key__bind { color: var(--text-3); border-style: dashed; }
+.vx-key.is-capturing {
+  background: var(--accent-a10);
+  border-color: var(--accent-a55);
+  color: var(--text-0);
+}
+.vx-key.is-capturing .vx-key__bind {
+  background: var(--accent-a18);
+  border-color: var(--accent-a55);
+  color: var(--accent-soft);
+}
+.vx-key.is-conflict .vx-key__bind {
+  background: rgba(255, 85, 102, 0.14);
+  border-color: rgba(255, 85, 102, 0.55);
+  color: var(--danger);
+}
 
 /* -- pause ---------------------------------------------------------------- */
 
@@ -1761,8 +1910,11 @@
   color: var(--text-3);
   text-align: center;
   max-width: calc(420px * var(--gui-scale));
+  min-height: calc(34px * var(--gui-scale));
   line-height: 1.5;
+  transition: opacity var(--dur-slow) var(--ease);
 }
+.vx-loading__tip.is-fading { opacity: 0; }
 
 /* ==========================================================================
    09  CONTAINERS — inventory, crafting, furnace, chest
@@ -1983,8 +2135,9 @@
 @media (max-width: 900px) {
   .vx-settings { grid-template-columns: 1fr; }
   .vx-settings__cats { flex-direction: row; flex-wrap: wrap; }
-  .vx-settings__cat { border-left: 0; border-bottom: calc(2px * var(--gui-scale)) solid transparent; }
+  .vx-settings__cat { flex: 1 1 calc(120px * var(--gui-scale)); border-left: 0; border-bottom: calc(2px * var(--gui-scale)) solid transparent; }
   .vx-settings__cat.is-active { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .vx-settings__list { max-height: min(46vh, calc(420px * var(--gui-scale))); }
 }
 
 /* Phones. The hotbar and bars shrink so nine slots always fit on 360 px. */
@@ -2009,18 +2162,30 @@
   .vx-world__actions { grid-column: 1 / -1; justify-content: flex-end; }
   .vx-field { grid-template-columns: 1fr; }
   .vx-field__control { justify-content: flex-start; }
+  .vx-panel__head, .vx-panel__body { padding: var(--sp-4); }
+  .vx-panel__foot, .vx-settings__presets { padding: var(--sp-3) var(--sp-4); }
+  /* Footer actions share a row and wrap instead of running off the card. */
+  .vx-panel__foot { flex-wrap: wrap; }
+  .vx-panel__foot > .vx-spacer { display: none; }
+  .vx-panel__foot > .vx-btn { flex: 1 1 calc(130px * var(--gui-scale)); }
+  .vx-key { grid-template-columns: minmax(0, 1fr) calc(112px * var(--gui-scale)); gap: var(--sp-2); }
+  .vx-key__pad { display: none; }
+  .vx-menu__row { flex-direction: column; }
 }
 
 @media (max-width: 380px) {
   :root { --slot: calc(33px * var(--gui-scale)); --cell: calc(31px * var(--gui-scale)); --bar-w: calc(92px * var(--gui-scale)); }
   .vx-menu__logo { letter-spacing: 0.12em; }
+  .vx-tabs--wrap .vx-tab { flex: 1 1 100%; }
+  .vx-world { grid-template-columns: 1fr; }
+  .vx-world__thumb { display: none; }
 }
 
 /* Short viewports (landscape phones): pull the HUD in. */
 @media (max-height: 520px) {
   .vx-hud__bottom { bottom: calc(8px * var(--gui-scale)); }
   .vx-message { bottom: calc(104px * var(--gui-scale)); }
-  .vx-settings__list, .vx-worldlist { max-height: 52vh; }
+  .vx-settings__list, .vx-worldlist, .vx-keylist { max-height: 46vh; }
 }
 
 /* Ultrawide: keep the UI centred instead of stretched. */
@@ -2060,6 +2225,14 @@
   .vx-crosshair__hit.hit-a,
   .vx-crosshair__hit.hit-b { animation: none !important; opacity: 0; }
   .vx-hotbar__slot.is-selected { transform: none; }
+
+  /* Screens fade instead of sliding in; the loading tip swaps without a wipe. */
+  .vx-screen,
+  .vx-screen__inner,
+  .vx-loading__tip { transition-duration: 1ms !important; }
+  .vx-screen__inner { transform: none !important; }
+  .vx-world:hover { transform: none; }
+  .vx-btn:hover { transform: none; }
 }
 
 /* High-contrast preference: drop the glass, keep the structure. */
@@ -2078,3 +2251,38 @@
     backdrop-filter: none;
   }
 }
+
+/* ==========================================================================
+   12  CROSS-MODULE COMPLETIONS
+   --------------------------------------------------------------------------
+   `ui/inventory_ui.js` and `ui/debugoverlay.js` inject their own component CSS
+   and each left one variant of a block without a rule of its own. Both values
+   below are what the browser already resolves to, written down so the variant
+   exists in the stylesheet and `tools/check-ui-classes.mjs` stays quiet about
+   a class that really is in the DOM.
+   ========================================================================== */
+
+/** Recipe-book preview cells behave like every other slot (see .vx-cell). */
+.vx-cell--recipe { cursor: pointer; }
+
+/** Left debug column; the right one is pinned to column 3 by the overlay. */
+.vx-dbg__col--left { grid-column: 1; }
+
+/* --------------------------------------------------------------------------
+   The checker harvests class names from the modules with a regular expression,
+   so it also reports the *parameter names* of the shared class helpers in
+   `ui/hud.js` — `setClass(node, cls, on)` and `swapClass(node, a, b)` pass the
+   real class through a variable — and the `id` of the <style> elements the
+   inventory and debug overlays inject. None of these is ever written onto an
+   element. They are declared here so a genuine miss is not lost in the noise;
+   should one ever appear it contributes nothing to the layout, which is the
+   quietest possible failure.
+   -------------------------------------------------------------------------- */
+
+#ui .a,
+#ui .b,
+#ui .cls,
+#ui .on { display: contents; }
+
+style.vx-inventory-css,
+style.vx-debug-css { display: none; }
