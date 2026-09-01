@@ -61,17 +61,35 @@ console.log('aim:', JSON.stringify(aim))
 await pump()
 await page.screenshot({ path: path.join(OUT, 'a-before.png'), timeout: 300000 })
 
+// CONTROL: a second frame of the same scene with no particles at all. Clouds,
+// waves, foliage sway and the TAA jitter keep moving, so this is the baseline
+// amount of change that must be subtracted from any particle measurement.
+await pump(2, 3)
+await page.screenshot({ path: path.join(OUT, 'a2-control.png'), timeout: 300000 })
+
+// Now spawn, and keep re-spawning while the pump runs: chips live about a
+// second of game time, but a frame here takes ~20 s, so a single burst would
+// be long dead by the time the frame that shows it is rendered.
 const spawned = await page.evaluate(t => {
   const g = window.game
-  if (!t.hit) return { spawned: 0 }
-  g.particles.spawnBlockBreak(t.hit.x + 0.5, t.hit.y + 0.5, t.hit.z + 0.5, t.hit.id)
-  return { spawned: g.particles.count }
+  if (!t.hit) return 0
+  window.__respawn = () => g.particles.spawnBlockBreak(t.hit.x + 0.5, t.hit.y + 0.5, t.hit.z + 0.5, t.hit.id)
+  window.__respawn()
+  return g.particles.count
 }, aim)
-console.log('after spawn:', JSON.stringify(spawned))
-// One short pump only: the chips must still be alive when photographed.
-for (let i = 0; i < 2; i++) { await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {}); await page.waitForTimeout(500) }
+console.log('spawned:', spawned)
+
+let alive = 0
+for (let round = 0; round < 8; round++) {
+  await page.evaluate(() => { for (let i = 0; i < 3; i++) window.__respawn() })
+  await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
+  await page.waitForTimeout(700)
+  alive = await page.evaluate(() => window.game.particles.count)
+  if (await variety() > 1 && alive > 20) break
+}
+await page.evaluate(() => { for (let i = 0; i < 4; i++) window.__respawn() })
+console.log('alive at capture:', alive, '| canvas distinct:', await variety())
 await page.screenshot({ path: path.join(OUT, 'b-after.png'), timeout: 300000 })
-console.log('alive at capture:', await page.evaluate(() => window.game.particles.count))
 
 await browser.close(); server.close()
 console.log('wrote', OUT)
