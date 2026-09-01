@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070b">
+<meta name="description" content="VOXELIA — eine Voxel-Welt in Echtzeit-PBR: unendliches prozedurales Terrain, farbiges Licht, volumetrischer Himmel und komplettes Survival-Gameplay.">
+<title>VOXELIA</title>
+<link rel="stylesheet" href="src/ui/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%236cc04a' d='M4 10 16 4l12 6-12 6z'/%3E%3Cpath fill='%238a6a4a' d='M4 10v12l12 6V16z'/%3E%3Cpath fill='%236b5138' d='M28 10v12l-12 6V16z'/%3E%3C/svg%3E">
+<style>
+  /* Critical boot styling — the rest lives in src/ui/style.css */
+  :root { color-scheme: dark; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #05070b; }
+  body { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; color: #e8eef7; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+  #boot {
+    position: fixed; inset: 0; display: flex; flex-direction: column; gap: 22px;
+    align-items: center; justify-content: center; z-index: 9000;
+    background: radial-gradient(120% 90% at 50% 0%, #12203a 0%, #070b12 55%, #04060a 100%);
+    transition: opacity .6s ease; font-size: 14px; letter-spacing: .02em;
+  }
+  #boot.hidden { opacity: 0; pointer-events: none; }
+  #boot h1 {
+    margin: 0; font-size: clamp(38px, 9vw, 92px); font-weight: 800; letter-spacing: .22em;
+    background: linear-gradient(180deg, #ffffff 0%, #8fd0ff 60%, #3f7fd0 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 80px rgba(90, 170, 255, .35);
+  }
+  #boot .tag { margin-top: -14px; opacity: .6; font-size: 13px; letter-spacing: .38em; text-transform: uppercase; }
+  #boot .bar { width: min(460px, 70vw); height: 4px; border-radius: 4px; background: rgba(255,255,255,.09); overflow: hidden; }
+  #boot .bar i { display: block; height: 100%; width: 0%; border-radius: 4px; transition: width .25s ease;
+    background: linear-gradient(90deg, #4ea3ff, #7ce0c0); box-shadow: 0 0 18px rgba(78,163,255,.7); }
+  #boot .status { opacity: .7; min-height: 20px; font-variant-numeric: tabular-nums; }
+  #fatal {
+    position: fixed; inset: 0; z-index: 9999; display: none; padding: 6vh 6vw; overflow: auto;
+    background: #0a0407; color: #ffd7d7; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px;
+  }
+  #fatal h2 { color: #ff6b6b; font-family: inherit; margin: 0 0 12px; }
+  #fatal pre { white-space: pre-wrap; line-height: 1.55; }
+  noscript { position: fixed; inset: 0; display: grid; place-items: center; z-index: 10000; background: #05070b; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="ui"></div>
+
+<div id="boot">
+  <h1>VOXELIA</h1>
+  <div class="tag">Infinite Worlds</div>
+  <div class="bar"><i id="boot-bar"></i></div>
+  <div class="status" id="boot-status">Initialisiere…</div>
+</div>
+
+<div id="fatal"><h2>VOXELIA konnte nicht starten</h2><pre id="fatal-text"></pre></div>
+
+<noscript><p style="color:#e8eef7;font-family:system-ui">VOXELIA benötigt JavaScript.</p></noscript>
+
+<script>
+  // Boot-level error trapping: anything thrown before the game installs its own
+  // handlers must still be visible instead of a black screen.
+  window.__voxBootError = null;
+  function voxFatal(what, detail) {
+    window.__voxBootError = what + '\n' + detail;
+    var el = document.getElementById('fatal');
+    var tx = document.getElementById('fatal-text');
+    if (tx) tx.textContent = what + '\n\n' + detail;
+    if (el) el.style.display = 'block';
+    var boot = document.getElementById('boot');
+    if (boot) boot.classList.add('hidden');
+  }
+  window.addEventListener('error', function (e) {
+    if (!window.__voxReady) voxFatal(e.message || 'Fehler', (e.error && e.error.stack) || (e.filename + ':' + e.lineno));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    if (!window.__voxReady) voxFatal('Unbehandelte Promise-Ablehnung', (r && (r.stack || r.message)) || String(r));
+  });
+  window.voxProgress = function (frac, text) {
+    var b = document.getElementById('boot-bar'), s = document.getElementById('boot-status');
+    if (b) b.style.width = Math.max(0, Math.min(1, frac)) * 100 + '%';
+    if (s && text) s.textContent = text;
+  };
+  window.voxBootDone = function () {
+    var boot = document.getElementById('boot');
+    if (boot) { boot.classList.add('hidden'); setTimeout(function () { boot.remove(); }, 700); }
+  };
+  if (!document.createElement('canvas').getContext('webgl2')) {
+    voxFatal('WebGL2 wird nicht unterstützt',
+      'VOXELIA benötigt WebGL2. Bitte einen aktuellen Chrome, Firefox, Edge oder Safari 15+ verwenden ' +
+      'und Hardwarebeschleunigung aktivieren.');
+  }
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

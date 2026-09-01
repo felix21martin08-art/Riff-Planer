@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>VOXELIA render probe</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{width:100%;height:100%;display:block}
+#hud{position:fixed;left:8px;top:8px;font:12px ui-monospace,monospace;color:#9fe;white-space:pre;text-shadow:0 1px 2px #000;z-index:10}</style>
+</head><body>
+<canvas id="gl"></canvas><div id="hud"></div>
+<script type="module">
+/* Standalone validation harness: boots GL + World + Renderer without any
+   gameplay code, streams chunks around a fixed camera and renders real frames.
+   Used by tools/smoke.mjs to prove the render pipeline works end to end. */
+import { GL } from '../src/core/gl.js';
+import { Settings } from '../src/core/settings.js';
+import { World } from '../src/world/world.js';
+import { Renderer } from '../src/render/renderer.js';
+import { mat4, vec3, Frustum } from '../src/core/math.js';
+import { isSolid, B } from '../src/world/blocks.js';
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const P = window.__probe = {
+  stage: 'boot', progress: 0, frames: 0, errors: [], fps: 0,
+  chunks: null, camera: null, ready: false, initMs: 0, avgFrameMs: 0,
+};
+const hud = document.getElementById('hud');
+const fail = (where, e) => {
+  const msg = `${where}: ${(e && (e.stack || e.message)) || e}`;
+  P.errors.push(msg); console.error(msg);
+};
+
+const canvas = document.getElementById('gl');
+canvas.width = num('w', 1280); canvas.height = num('h', 720);
+
+const settings = new Settings({ autoLoad: false, storageKey: 'voxelia.probe' });
+settings.set('renderDistance', num('rd', 6));
+settings.set('textureResolution', num('tex', 256));
+settings.set('shadowResolution', num('shadow', 1024));
+settings.set('renderScale', 1);
+if (q.get('preset')) settings.applyPreset(q.get('preset'));
+
+const gl = new GL(canvas, {});
+const world = new World(gl, settings, { seed: num('seed', 1337), name: 'probe' });
+const renderer = new Renderer(gl, settings);
+
+/* A minimal environment: everything the sky and lighting passes read. */
+const TAU = Math.PI * 2;
+const env = {
+  timeOfDay: num('time', 0.30), dayCount: 0, weather: 'clear',
+  rainStrength: num('rain', 0), thunderStrength: 0, moonPhase: 0.5,
+  latitude: 0.35, aurora: false, auroraIntensity: 0, seaLevel: 62,
+  sunDir: new Float32Array([0, 1, 0]), moonDir: new Float32Array([0, -1, 0]),
+  sunColor: new Float32Array([1, 0.96, 0.9]), sunIntensity: 1,
+  skyAmbient: new Float32Array([0.25, 0.35, 0.55]),
+  groundColor: new Float32Array([0.16, 0.15, 0.13]),
+  grassColor: new Float32Array([0.35, 0.55, 0.22]),
+  fogColor: new Float32Array([0.55, 0.68, 0.85]),
+  biomeFogColor: new Float32Array([0.55, 0.68, 0.85]), fogDensity: 0.0016,
+  update() {
+    // 0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight
+    const a = (this.timeOfDay - 0.25) * TAU;
+    const el = Math.sin(a + Math.PI / 2), az = Math.cos(a + Math.PI / 2);
+    vec3.normalize(this.sunDir, vec3.set(this.sunDir, az * 0.45, el, az * 0.89));
+    vec3.set(this.moonDir, -this.sunDir[0], -this.sunDir[1], -this.sunDir[2]);
+    const h = Math.max(0, this.sunDir[1]);
+    this.sunIntensity = Math.pow(h, 0.6) * 3.2;
+    const warm = Math.pow(1 - h, 2.2);
+    vec3.set(this.sunColor, 1, 0.98 - warm * 0.42, 0.94 - warm * 0.72);
+    const amb = 0.02 + h * 0.5;
+    vec3.set(this.skyAmbient, amb * 0.55, amb * 0.72, amb * 1.15);
+    vec3.set(this.fogColor, 0.10 + h * 0.5, 0.14 + h * 0.58, 0.22 + h * 0.68);
+    vec3.set(this.biomeFogColor, this.fogColor[0], this.fogColor[1], this.fogColor[2]);
+    if (!this._fogLocked) this.fogDensity = 0.0016;
+    this.aurora = h < 0.02; this.auroraIntensity = this.aurora ? 0.6 : 0;
+  },
+  isDay() { return this.sunDir[1] > 0; },
+};
+env.update();
+
+const camera = {
+  position: new Float32Array([8, 96, 8]),
+  forward: new Float32Array([0, 0, -1]),
+  up: new Float32Array([0, 1, 0]),
+  right: new Float32Array([1, 0, 0]),
+  yaw: num('yaw', -30) * Math.PI / 180, pitch: num('pitch', -12) * Math.PI / 180,
+  fov: 75, near: 0.05, far: 1200, aspect: canvas.width / canvas.height,
+  view: mat4.create(), proj: mat4.create(), viewProj: mat4.create(),
+  prevViewProj: mat4.create(), frustum: new Frustum(), underwater: false,
+};
+const target = vec3.create();
+function updateCamera() {
+  const cp = Math.cos(camera.pitch), sp = Math.sin(camera.pitch);
+  vec3.set(camera.forward, Math.sin(camera.yaw) * cp, sp, -Math.cos(camera.yaw) * cp);
+  vec3.normalize(camera.forward, camera.forward);
+  vec3.set(camera.right, Math.cos(camera.yaw), 0, Math.sin(camera.yaw));
+  vec3.cross(camera.up, camera.right, camera.forward);
+  vec3.normalize(camera.up, camera.up);
+  vec3.add(target, camera.position, camera.forward);
+  mat4.copy(camera.prevViewProj, camera.viewProj);
+  mat4.lookAt(camera.view, camera.position, target, camera.up);
+  mat4.perspective(camera.proj, camera.fov * Math.PI / 180, camera.aspect, camera.near, camera.far);
+  mat4.multiply(camera.viewProj, camera.proj, camera.view);
+  camera.frustum.fromViewProj(camera.viewProj);
+}
+updateCamera();
+
+/** True when (x,y,z) is a non-solid block the camera can sit in. */
+function isClear(x, y, z) {
+  const id = world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z));
+  return id === 0 || !isSolid(id);
+}
+
+/**
+ * Place the camera in open air above the terrain of ITS OWN column, with two
+ * blocks of headroom, and record whether it ended up inside a solid block.
+ * @returns {boolean} true when a valid spot was found
+ */
+function placeCamera() {
+  const cx = num('x', 8.5), cz = num('z', 8.5);
+  const h = world.getHeight(Math.floor(cx), Math.floor(cz));
+  if (!Number.isFinite(h)) return false;
+  for (let y = Math.max(h, -60); y < 300; y++) {
+    if (isClear(cx, y, cz) && isClear(cx, y + 1, cz) && isClear(cx, y + 2, cz)) {
+      vec3.set(camera.position, cx, y + 1.7 + num('dy', 0), cz);
+      P.spawnHeight = h;
+      P.cameraInSolid = !isClear(camera.position[0], camera.position[1], camera.position[2]);
+      updateCamera();
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Build a hand-made scene with unambiguous orientation: a grass platform, a
+ * wall of grass blocks seen face-on, plants, flowers and an oak log lying both
+ * upright and flat. Terrain screenshots cannot settle which way a texture is
+ * mapped; this can.
+ * @returns {void}
+ */
+function buildOrientationScene() {
+  const bx = 0, bz = 0;
+  const by = Math.max(70, Math.floor(world.getHeight(0, 0) || 70) + 6);
+  let writes = 0;
+  const set = (x, y, z, id) => {
+    const wx = bx + x, wy = by + y, wz = bz + z;
+    if (world.getBlock(wx, wy, wz) === id) return; // avoid needless relight cascades
+    world.setBlock(wx, wy, wz, id);
+    writes++;
+  };
+  P.stage = 'testscene:clear';
+  for (let x = -3; x <= 14; x++) for (let z = -3; z <= 10; z++) for (let y = -1; y <= 10; y++) set(x, y, z, 0);
+  P.testWrites = writes;
+  // Floor.
+  for (let x = -2; x <= 13; x++) for (let z = -2; z <= 9; z++) set(x, -1, z, B.GRASS_BLOCK);
+  // A wall of grass blocks, three high, seen face-on from -Z.
+  for (let x = 0; x <= 3; x++) for (let y = 0; y <= 2; y++) set(x, y, 6, B.GRASS_BLOCK);
+  // Dirt, stone and sand columns next to it for comparison.
+  for (let y = 0; y <= 2; y++) { set(5, y, 6, B.DIRT); set(6, y, 6, B.STONE); set(7, y, 6, B.SAND); }
+  // Upright log (top texture on top) and a flat log (side texture on top).
+  for (let y = 0; y <= 2; y++) set(9, y, 6, B.OAK_LOG);
+  set(11, 0, 6, B.OAK_LOG); set(12, 0, 6, B.OAK_PLANKS);
+  // Plants and flowers standing on the floor.
+  const plants = [B.SHORT_GRASS, B.DANDELION, B.POPPY, B.SHORT_GRASS, B.POPPY, B.DANDELION];
+  for (let i = 0; i < plants.length; i++) if (plants[i] !== undefined) set(i * 2, 0, 2, plants[i]);
+  // A torch and a glowing block so emissive orientation is visible too.
+  if (B.TORCH !== undefined) set(9, 0, 2, B.TORCH);
+  if (B.GLOWSTONE !== undefined) set(12, 0, 2, B.GLOWSTONE);
+  vec3.set(camera.position, 6.5, by + 1.4, bz - 5.5);
+  camera.yaw = 0; camera.pitch = 0;
+  updateCamera();
+  P.testScene = { origin: [bx, by, bz], writes };
+}
+
+const frame = {
+  camera, world, entities: null, player: null, environment: env,
+  particles: null, hit: null, breakProgress: 0, time: 0, dt: 1 / 60, frameIndex: 0,
+};
+
+const t0 = performance.now();
+try {
+  P.stage = 'world.init';
+  await world.init();
+  P.stage = 'renderer.init';
+  await renderer.init((f, label) => { P.progress = f; P.stage = label || P.stage; });
+  P.initMs = performance.now() - t0;
+  P.ready = true;
+  P.stage = 'streaming';
+} catch (e) { fail('init', e); P.stage = 'init-failed'; }
+
+/* The world streams under a per-update time budget (3 ms of mesh upload per
+   call). Under a software rasteriser a frame can take 20 s, which would starve
+   streaming for minutes. So pump update() on its own before rendering starts. */
+const SETTLE_MS = num('settle', 45000);
+async function settle() {
+  P.stage = 'settling';
+  const until = performance.now() + SETTLE_MS;
+  let iterations = 0, idleRuns = 0;
+  while (performance.now() < until) {
+    for (let i = 0; i < 24; i++) {
+      try { world.update(1 / 60, camera.position, camera.frustum); } catch (e) { fail('settle', e); return; }
+      iterations++;
+    }
+    let st = null;
+    try { st = world.getStats(); } catch {}
+    if (st) {
+      P.chunks = st;
+      const idle = st.queued === 0 && st.meshing === 0 && st.generating === 0 && (st.lightQueue | 0) === 0;
+      if (idle && ++idleRuns >= 3) break;
+      if (!idle) idleRuns = 0;
+      if (!placed && world.isLoaded(0, 0)) placed = placeCamera();
+    }
+    await new Promise(r => setTimeout(r, 0));
+  }
+  P.settleIterations = iterations;
+  P.stage = 'rendering';
+}
+
+let placed = false, last = performance.now(), acc = 0, frameMsSum = 0;
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
+  frame.dt = dt; frame.time += dt; frame.frameIndex = P.frames;
+  try {
+    if (num('orbit', 0)) camera.yaw += dt * 0.25;
+    updateCamera();
+    env.update();
+    world.update(dt, camera.position, camera.frustum);
+  } catch (e) { fail('update', e); }
+  const fs = performance.now();
+  try { renderer.render(frame); } catch (e) { fail('render', e); }
+  frameMsSum += performance.now() - fs;
+  P.frames++;
+  if (acc > 0.5) {
+    P.fps = Math.round(P.frames / ((now - t0) / 1000));
+    P.avgFrameMs = +(frameMsSum / P.frames).toFixed(2);
+    try { P.chunks = world.getStats(); } catch {}
+    P.camera = [...camera.position].map(v => +v.toFixed(1));
+    hud.textContent = `${P.stage}  frames=${P.frames} fps=${P.fps} frameMs=${P.avgFrameMs}\n`
+      + `cam=${P.camera}  init=${P.initMs | 0}ms\n`
+      + (P.chunks ? `chunks=${P.chunks.loaded} sections=${P.chunks.sections} tris=${P.chunks.triangles} queued=${P.chunks.queued} light=${P.chunks.lightQueue}\n` : '')
+      + (P.errors.length ? `ERRORS ${P.errors.length}: ${P.errors[0].slice(0, 120)}` : 'no errors');
+    acc = 0;
+  }
+  schedule();
+}
+
+/* Headless Chromium throttles requestAnimationFrame when no compositor frame is
+   being demanded, which stalls the loop between screenshots. Prefer rAF, but
+   fall back to a timer if it does not fire, so frames keep advancing headless. */
+let rafId = 0, fallbackId = 0;
+function schedule() {
+  cancelAnimationFrame(rafId);
+  clearTimeout(fallbackId);
+  let fired = false;
+  rafId = requestAnimationFrame((t) => { fired = true; clearTimeout(fallbackId); loop(t); });
+  fallbackId = setTimeout(() => { if (!fired) { cancelAnimationFrame(rafId); loop(performance.now()); } }, 250);
+}
+/* Live control surface for tools/capture.mjs: change the scene between shots
+   without paying the texture-generation and streaming cost again. */
+window.__probeApply = (cfg = {}) => {
+  if (cfg.time !== undefined) env.timeOfDay = cfg.time;
+  if (cfg.rain !== undefined) env.rainStrength = cfg.rain;
+  if (cfg.weather !== undefined) env.weather = cfg.weather;
+  if (cfg.fogDensity !== undefined) { env.fogDensity = cfg.fogDensity; env._fogLocked = true; }
+  if (cfg.yaw !== undefined) camera.yaw = cfg.yaw * Math.PI / 180;
+  if (cfg.pitch !== undefined) camera.pitch = cfg.pitch * Math.PI / 180;
+  if (cfg.fov !== undefined) camera.fov = cfg.fov;
+  if (cfg.pos) vec3.set(camera.position, cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+  if (cfg.dy !== undefined) camera.position[1] += cfg.dy;
+  if (cfg.setting) for (const [k, v] of Object.entries(cfg.setting)) settings.set(k, v);
+  env.update();
+  updateCamera();
+  if (cfg.dy !== undefined || cfg.pos) {
+    // Never allow a repositioned camera to end up buried in terrain.
+    let guard = 0;
+    while (!isClear(camera.position[0], camera.position[1], camera.position[2]) && guard++ < 400) camera.position[1] += 1;
+    updateCamera();
+  }
+  P.cameraInSolid = !isClear(camera.position[0], camera.position[1], camera.position[2]);
+  P.applied = cfg;
+  return { camera: [...camera.position], inSolid: P.cameraInSolid, time: env.timeOfDay, fog: env.fogDensity };
+};
+window.__probeStats = () => { try { return world.getStats(); } catch { return null; } };
+if (P.ready) { try { await settle(); } catch (e) { fail('settle', e); } }
+if (P.ready && num('testscene', 0)) {
+  try {
+    buildOrientationScene();
+    // Let the edits re-mesh and re-light before the first frame, reporting
+    // progress so a slow rebuild is visible instead of looking like a hang.
+    P.stage = 'testscene:remesh';
+    for (let i = 0; i < 400; i++) {
+      world.update(1 / 60, camera.position, camera.frustum);
+      if ((i & 31) === 0) {
+        const st = world.getStats();
+        P.chunks = st;
+        P.stage = `testscene:remesh ${i} q=${st.queued} m=${st.meshing} l=${st.lightQueue}`;
+        if (st.queued === 0 && st.meshing === 0 && st.lightQueue === 0 && i > 64) break;
+      }
+    }
+    P.stage = 'rendering';
+  } catch (e) { fail('testscene', e); }
+}
+last = performance.now();
+schedule();
+window.__voxReady = true;
+</script></body></html>
