@@ -71,30 +71,39 @@ const results = await page.evaluate(async () => {
     ok('Redstone: Hebel speist Lampe über Draht', after > before, `Leistung ${before} -> ${after}`)
   } catch (e) { ok('Redstone: Hebel speist Lampe über Draht', false, e.message) }
 
-  // --- farming: till, plant, grow ------------------------------------------
+  // --- farming: tilling, planting and a real growth chance -----------------
   try {
-    g.world.setBlock(ox + 6, oy - 1, oz, Bc.FARMLAND)
-    g.world.setBlock(ox + 6, oy, oz, Bc.WHEAT)
-    const stage0 = g.world.getBlock(ox + 6, oy, oz)
-    let grew = false
-    for (let i = 0; i < 400 && !grew; i++) {
-      if (g.farming && g.farming.growAt) grew = !!g.farming.growAt(ox + 6, oy, oz)
-      else { tick(5); grew = g.world.getBlock(ox + 6, oy, oz) !== stage0 }
-    }
-    ok('Landwirtschaft: Weizen wächst', grew || g.world.getBlock(ox + 6, oy, oz) !== stage0,
-      `Block ${stage0} -> ${g.world.getBlock(ox + 6, oy, oz)}`)
-  } catch (e) { ok('Landwirtschaft: Weizen wächst', false, e.message) }
+    const f = g.farming
+    g.world.setBlock(ox + 6, oy - 1, oz, Bc.DIRT)
+    g.world.setBlock(ox + 6, oy, oz, 0)
+    g.world.setBlock(ox + 5, oy - 1, oz, Bc.WATER)   // moisture source
+    tick(2)
+    const tilled = f && f.tillAt ? f.tillAt(ox + 6, oy - 1, oz) : false
+    const soil = g.world.getBlock(ox + 6, oy - 1, oz)
+    ok('Landwirtschaft: Hacken erzeugt Ackerland', soil === Bc.FARMLAND, `Block ${soil} (Farmland=${Bc.FARMLAND}) tillAt=${tilled}`)
 
-  // --- effects: speed changes the movement modifier -------------------------
+    const items = await import('../src/game/items.js')
+    const seed = items.I ? (items.I.WHEAT_SEEDS ?? items.I.SEEDS) : null
+    const planted = f && f.plantAt && seed != null ? f.plantAt(ox + 6, oy, oz, seed) : false
+    const crop = g.world.getBlock(ox + 6, oy, oz)
+    ok('Landwirtschaft: Saat wird gepflanzt', crop !== 0, `Block ${crop} plantAt=${planted}`)
+
+    const moisture = f && f.moistureAt ? f.moistureAt(ox + 6, oy - 1, oz) : -1
+    const chance = f && f.growthChance ? f.growthChance(ox + 6, oy, oz) : -1
+    ok('Landwirtschaft: Wachstumschance > 0', chance > 0, `Feuchte ${moisture}, Chance ${chance}`)
+  } catch (e) { ok('Landwirtschaft: Anbau', false, e.message) }
+
+  // --- effects: speed folds into the attribute record -----------------------
   try {
     const em = g.effects
-    const base = em && em.getSpeedMultiplier ? em.getSpeedMultiplier(g.player) : null
+    const before = em && em.attributes ? em.attributes(g.player).speed : null
     em && em.add && em.add(g.player, 'speed', 1, 400)
     tick(4)
     const has = em && em.has ? em.has(g.player, 'speed') : false
-    const now = em && em.getSpeedMultiplier ? em.getSpeedMultiplier(g.player) : null
-    ok('Effekte: Schnelligkeit wirkt', has && (base === null || now > base), `aktiv=${has} ${base} -> ${now}`)
-  } catch (e) { ok('Effekte: Schnelligkeit wirkt', false, e.message) }
+    const after = em && em.attributes ? em.attributes(g.player).speed : null
+    ok('Effekte: Schnelligkeit erhöht das Tempo-Attribut',
+      has && after !== null && before !== null && after > before, `aktiv=${has}, Tempo ${before} -> ${after}`)
+  } catch (e) { ok('Effekte: Schnelligkeit', false, e.message) }
 
   // --- enchanting: a table with bookshelves produces offers -----------------
   try {
@@ -111,10 +120,15 @@ const results = await page.evaluate(async () => {
     const px = ox + 2, py = oy, pz = oz + 2
     for (let i = 0; i < 4; i++) { g.world.setBlock(px + i, py - 1, pz, Bc.OBSIDIAN); g.world.setBlock(px + i, py + 4, pz, Bc.OBSIDIAN) }
     for (let j = 0; j < 4; j++) { g.world.setBlock(px, py + j, pz, Bc.OBSIDIAN); g.world.setBlock(px + 3, py + j, pz, Bc.OBSIDIAN) }
+    const dims = await import('../src/game/dimensions.js')
+    const frameOk = dims.validatePortalFrame
+      ? !!dims.validatePortalFrame(g.world, px + 1, py + 1, pz, 'x')
+      : null
     let lit = false
-    if (dm && dm.ignitePortal) lit = !!dm.ignitePortal(g.world, px + 1, py + 1, pz)
-    else if (dm && dm.tryLightPortal) lit = !!dm.tryLightPortal(g.world, px + 1, py + 1, pz)
+    if (dm && dm.ignitePortalAt) lit = !!dm.ignitePortalAt(px + 1, py + 1, pz)
+    else if (dims.ignitePortal) lit = !!dims.ignitePortal(g.world, px + 1, py + 1, pz)
     tick(4)
+    out.push({ name: 'Dimensionen: Rahmen gültig', pass: frameOk !== false, detail: `validate=${frameOk}` })
     const inside = g.world.getBlock(px + 1, py + 1, pz)
     ok('Dimensionen: Portal entzündet', lit || inside === Bc.NETHER_PORTAL, `Rückgabe=${lit} Blockinnen=${inside}`)
   } catch (e) { ok('Dimensionen: Portal entzündet', false, e.message) }
