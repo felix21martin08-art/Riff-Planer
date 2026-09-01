@@ -22,13 +22,17 @@ const OUT = process.argv[2] || '/tmp/uitour'
 fs.mkdirSync(OUT, { recursive: true })
 const { server, base } = await serve(ROOT)
 const browser = await chromium.launch({ args: CHROME_ARGS })
-const page = await browser.newPage({ viewport: { width: 1024, height: 576 } })
+// Screens fade in over ~200 ms, but a frame here takes ~20 s, so whether a
+// screenshot catches the transition is pure chance — that lottery already made
+// two screens look broken in one run and fine in the next. Emulating
+// reduced-motion disables the transitions instead of guessing at timing.
+const page = await browser.newPage({ viewport: { width: 1024, height: 576 }, reducedMotion: 'reduce' })
 const msgs = []
 page.on('pageerror', e => msgs.push('PAGEERROR ' + e.message.slice(0, 200)))
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') msgs.push(m.type().toUpperCase() + ' ' + m.text().slice(0, 200)) })
 
 /** Force n compositor frames, then screenshot. */
-async function settleShot(name, note, frames = 4) {
+async function settleShot(name, note, frames = 5) {
   for (let i = 0; i < frames; i++) {
     await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
     await page.waitForTimeout(900)
