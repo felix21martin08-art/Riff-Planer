@@ -133,13 +133,24 @@ await page.mouse.move(W / 2 + 260, H / 2 + 40, { steps: 12 })
 await shot('04-look', 'Nach dem Umsehen')
 
 console.log('breaking a block …')
+await page.evaluate(() => { window.game.player.pitch = -1.1 })
+await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
+await page.waitForTimeout(1200)
 const before = await page.evaluate(() => {
   const g = window.game
   const hit = g.interaction && g.interaction.hit
   return hit ? { x: hit.x, y: hit.y, z: hit.z, id: g.world.getBlock(hit.x, hit.y, hit.z) } : null
 })
 await page.mouse.down({ button: 'left' })
-await page.waitForTimeout(4000)
+// Break progress accrues per game tick, and the loop only runs ticks when a
+// frame runs — so force frames while the button is held instead of waiting on
+// the wall clock, which would deliver almost no ticks at 20 s per frame.
+for (let i = 0; i < 10; i++) {
+  await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {})
+  await page.waitForTimeout(500)
+  const p2 = await page.evaluate(() => window.game.interaction ? +(window.game.interaction.breakProgress || 0).toFixed(2) : -1)
+  if (p2 === 0 && i > 2) break // the block already broke and the target reset
+}
 await page.mouse.up({ button: 'left' })
 const after = before ? await page.evaluate(t => window.game.world.getBlock(t.x, t.y, t.z), before) : null
 console.log('block target:', JSON.stringify(before), '-> now', after)
