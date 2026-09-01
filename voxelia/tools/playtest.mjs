@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
+import { waitAlive } from './harness.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -41,10 +42,30 @@ page.on('pageerror', e => errors.push('PAGEERROR: ' + (e.stack || e.message).spl
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)) })
 
 const steps = []
+/** Distinct colours in the middle of the WebGL canvas; 1 means nothing rendered. */
+const variety = () => page.evaluate(() => {
+  const c = document.querySelector('canvas'); const gl = c && c.getContext('webgl2')
+  if (!gl) return -1
+  const b = new Uint8Array(24 * 14 * 4); const s = new Set()
+  try { gl.readPixels((c.width - 24) >> 1, (c.height - 14) >> 1, 24, 14, gl.RGBA, gl.UNSIGNED_BYTE, b) } catch { return -1 }
+  for (let i = 0; i < b.length; i += 4) s.add((b[i] << 16) | (b[i + 1] << 8) | b[i + 2])
+  return s.size
+})
 const shot = async (name, note) => {
+  // A frame takes ~20 s on the software rasteriser, so force composites until
+  // the canvas actually holds an image. Reporting a blank frame as success is
+  // how several phantom "bugs" entered this project's history.
+  let distinct = 0
+  for (let r = 0; r < 5; r++) {
+    for (let i = 0; i < 4; i++) { await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } }).catch(() => {}); await page.waitForTimeout(700) }
+    distinct = await variety()
+    if (distinct > 1) break
+  }
   const f = path.join(OUT, name + '.png')
-  try { await page.screenshot({ path: f, timeout: 300000 }); steps.push({ name, note, kb: (fs.statSync(f).size / 1024) | 0 }) }
-  catch (e) { steps.push({ name, note, error: e.message.split('\n')[0] }) }
+  try {
+    await page.screenshot({ path: f, timeout: 300000 })
+    steps.push({ name, note, kb: (fs.statSync(f).size / 1024) | 0, distinct })
+  } catch (e) { steps.push({ name, note, error: e.message.split('\n')[0] }) }
 }
 const state = () => page.evaluate(() => window.game && window.game.state)
 const snap = () => page.evaluate(() => {
@@ -68,13 +89,13 @@ const snap = () => page.evaluate(() => {
 
 console.log('booting the real game …')
 await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded', timeout: 120000 })
-await page.waitForFunction(() => window.game && window.game.state === 'menu', null, { timeout: 900000, polling: 2000 })
+await waitAlive(page, () => window.game && window.game.state === 'menu', { label: 'menu', verbose: true })
 console.log('menu reached')
 await shot('01-menu', 'Hauptmenü mit lebender Weltkulisse')
 
 console.log('creating a world …')
 await page.evaluate(seed => window.game.startWorld({ seed, name: 'Testwelt', gameMode: 'survival' }), SEED)
-await page.waitForFunction(() => window.game.state === 'playing', null, { timeout: 900000, polling: 2000 })
+await waitAlive(page, () => window.game.state === 'playing', { label: 'playing', verbose: true })
 console.log('playing:', JSON.stringify(await snap()))
 
 // The world streams under a per-update time budget; on a software rasteriser a
@@ -139,7 +160,7 @@ console.log('\n--- result ---')
 console.log('final:', JSON.stringify(final, null, 1))
 console.log('inventory state:', invState)
 console.log('block break:', before ? `${before.id} -> ${after}` : 'no target under the crosshair')
-console.log('steps:'); steps.forEach(s => console.log(`  ${s.name.padEnd(14)} ${s.error ? 'FAILED: ' + s.error : String(s.kb).padStart(5) + ' KB'}  ${s.note}`))
+console.log('steps:'); steps.forEach(s => console.log(`  ${s.name.padEnd(14)} ${s.error ? 'FAILED: ' + s.error : String(s.kb).padStart(5) + ' KB  distinct=' + String(s.distinct).padStart(3)}  ${s.note}`))
 if (errors.length) { console.log(`\nerrors (${errors.length}):`); [...new Set(errors)].slice(0, 12).forEach(e => console.log('  ' + e)) }
 else console.log('\nno console or page errors.')
 process.exit(errors.length ? 1 : 0)
